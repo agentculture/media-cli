@@ -270,7 +270,7 @@ than that, and the difference decides how `doctor` should diagnose each side:
 
 | Node | Group | Operator in group? | What actually grants access |
 |------|-------|--------------------|------------------------------|
-| `/dev/video0` | `video` | **no** | seat ACL only (`user:spark:rw-` from logind) |
+| `/dev/video0` | `video` | **no** | seat ACL only (logind grants `user:<operator>:rw-`) |
 | `/dev/snd/controlC0` | `audio` | **yes** | group membership **and** the seat ACL |
 
 So on this host a headless agent, container, or systemd unit loses **video**
