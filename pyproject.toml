@@ -1,7 +1,7 @@
 [project]
-name = "culture-agent-template"
+name = "media-cli"
 version = "0.6.1"
-description = "culture-agent-template — a clonable template for AgentCulture mesh agents."
+description = "Agent and CLI for the local media I/O device plane: enumerate and drive attached media devices — speakers and audio sinks, plus optional inputs such as standalone microphones — composing webcam-cli for camera and mic capture. Owns device selection, routing, playback and recording, not the interpretation of what is captured or played."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
@@ -16,18 +16,18 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/agentculture/culture-agent-template"
-Issues = "https://github.com/agentculture/culture-agent-template/issues"
+Homepage = "https://github.com/agentculture/media-cli"
+Issues = "https://github.com/agentculture/media-cli/issues"
 
 [project.scripts]
-culture-agent-template = "culture_agent_template.cli:main"
+media = "media_cli.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["culture_agent_template"]
+packages = ["media_cli"]
 
 [dependency-groups]
 dev = [
@@ -42,10 +42,10 @@ dev = [
 ]
 
 [tool.coverage.run]
-source = ["culture_agent_template"]
-omit = ["culture_agent_template/__pycache__/*"]
+source = ["media_cli"]
+omit = ["media_cli/__pycache__/*"]
 # Emit repo-relative paths in coverage.xml so SonarCloud maps them to
-# sonar.sources=culture_agent_template (absolute/.venv paths fail to map → empty coverage).
+# sonar.sources=media_cli (absolute/.venv paths fail to map → empty coverage).
 relative_files = true
 
 [tool.coverage.report]
@@ -60,7 +60,7 @@ exclude_lines = [
 [tool.isort]
 profile = "black"
 line_length = 100
-known_first_party = ["culture_agent_template"]
+known_first_party = ["media_cli"]
 
 [tool.black]
 line-length = 100
