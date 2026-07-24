@@ -1,6 +1,6 @@
 [project]
 name = "media-cli"
-version = "0.6.1"
+version = "0.6.2"
 description = "Agent and CLI for the local media I/O device plane: enumerate and drive attached media devices — speakers and audio sinks, plus optional inputs such as standalone microphones — composing webcam-cli for camera and mic capture. Owns device selection, routing, playback and recording, not the interpretation of what is captured or played."
 readme = "README.md"
 license = "Apache-2.0"
