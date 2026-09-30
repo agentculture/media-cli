@@ -6,18 +6,17 @@ AgentCulture **skills supplier** after the steward → guildmaster cutover
 (`steward doctor`, the sibling-pattern baseline); only the skills-supplier role
 moved. This file tracks provenance so re-syncs stay deterministic.
 
-Seven skills — `think`, `spec-to-plan`, `assign-to-workforce`, `scope`,
-`challenge`, `deviate`, and `summarize-delivery` — originate in
-[`agentculture/devague`](https://github.com/agentculture/devague). The first
-three are **re-broadcast** through guildmaster — cite guildmaster's copy; track
-devague as the true origin. The remaining four (`scope`, `challenge`, `deviate`,
-`summarize-delivery`) are vendored **directly from devague**: guildmaster's
-current re-broadcast copies carry an added `scripts/*.sh` wrapper (guildmaster
-`292feac`, "vendor scripts/ wrappers for 4 script-less devague skills") that the
-devague originals — and these vendored copies — do not have, so citing
-guildmaster's copy would pull in content this repo never asked for. This is a
-tracked local divergence, parallel to `ask-colleague`'s below (see
-[below](#local-divergence--scope--challenge--deviate--summarize-delivery-vendored-directly-from-devague-2026-07-15)).
+Eight skills — `think`, `spec-to-plan`, `assign-to-workforce`, `scope`,
+`challenge`, `deviate`, `validate-delivery`, and `summarize-delivery` —
+originate in [`agentculture/devague`](https://github.com/agentculture/devague)
+and are **re-broadcast** through guildmaster. All eight were re-synced together
+on 2026-09-30 from the sibling `jev-factory` checkout, whose copies are
+byte-identical to guildmaster's current re-broadcast (guildmaster 0.26.10,
+`9a6ccf4`) — including the `scripts/*.sh` wrapper each skill now carries. Cite
+guildmaster's copy; track devague as the true origin. (This retires the earlier
+"vendored directly from devague" divergence for `scope` / `challenge` /
+`deviate` / `summarize-delivery` — see
+[below](#retired-divergence--devague-direct-vendoring-2026-07-15--2026-09-30).)
 One skill, `ask-colleague` (formerly `outsource`), originates in
 [`agentculture/colleague`](https://github.com/agentculture/colleague) — the
 renamed `convertible`. guildmaster's re-broadcast still carries the old
@@ -39,13 +38,14 @@ is load-bearing, even where guildmaster's upstream copy omits it.
 | `pypi-maintainer` | `../guildmaster/.claude/skills/pypi-maintainer/` | guildmaster | Switch a package install between PyPI / TestPyPI / local editable (`scripts/switch-source.sh`). Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
 | `run-tests` | `../guildmaster/.claude/skills/run-tests/` | guildmaster | pytest + xdist + coverage (`scripts/test.sh`). Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
 | `sonarclaude` | `../guildmaster/.claude/skills/sonarclaude/` | guildmaster | SonarCloud API queries (`scripts/sonar.sh`). Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
-| `think` | `../guildmaster/.claude/skills/think/` | **devague** (re-broadcast via guildmaster) | idea→spec leg of the devague workflow chain. Verbatim (already carried `type: command` at guildmaster). Origin/broadcast prose left verbatim. | 2026-05-26 (guildmaster 0.6.0) |
-| `spec-to-plan` | `../guildmaster/.claude/skills/spec-to-plan/` | **devague** (re-broadcast via guildmaster) | spec→plan leg of the devague workflow chain. Verbatim (already carried `type: command`). | 2026-05-26 (guildmaster 0.6.0) |
-| `assign-to-workforce` | `../guildmaster/.claude/skills/assign-to-workforce/` | **devague** (re-broadcast via guildmaster) | plan→parallel-implementation leg of the devague workflow chain. Verbatim (already carried `type: command`). | 2026-05-26 (guildmaster 0.6.0) |
-| `scope` | `../devague/.claude/skills/scope/` | **devague** (vendored directly — guildmaster's copy now carries an added `scripts/` wrapper; see [local divergence](#local-divergence--scope--challenge--deviate--summarize-delivery-vendored-directly-from-devague-2026-07-15)) | Explores the scope of a vague idea BEFORE framing it into a spec — the idea→scope leg, the optional opening move ahead of `/think`; surveys the surfaces the idea touches (code, docs, skills, CI, sibling repos) and seeds the coming Announcement Frame with boundary/non-goal/assumption claims that cite what was actually explored. Verbatim (carries `type: command`). | 2026-07-15 (devague#74/#75/#76) |
-| `challenge` | `../devague/.claude/skills/challenge/` | **devague** (vendored directly — guildmaster's copy now carries an added `scripts/` wrapper; see [local divergence](#local-divergence--scope--challenge--deviate--summarize-delivery-vendored-directly-from-devague-2026-07-15)) | Runs a risk-scaled blind-spot discovery pass over a converged, exported frame BETWEEN `/think` and `/spec-to-plan` (the seventh origin skill, third leg in flow order): pressure-tests the spec through structured lenses, routes every finding back through the existing deterministic moves as proposed-only content the human adjudicates, and on a clean pass records the examined lenses/surfaces and residual uncertainty — never a claim that there are no unknown unknowns. Verbatim (carries `type: command`). | 2026-07-15 (devague#74/#75/#76) |
-| `deviate` | `../devague/.claude/skills/deviate/` | **devague** (vendored directly — guildmaster's copy now carries an added `scripts/` wrapper; see [local divergence](#local-divergence--scope--challenge--deviate--summarize-delivery-vendored-directly-from-devague-2026-07-15)) | Stops an in-flight assign-to-workforce run the moment execution must diverge from the confirmed plan, gets explicit human approval for the divergence, and records it as a first-class, append-only deviation record via `devague deviate` before resuming — never folds a deviation silently into drift after the fact. Verbatim (carries `type: command`). | 2026-07-15 (devague#74/#75/#76) |
-| `summarize-delivery` | `../devague/.claude/skills/summarize-delivery/` | **devague** (vendored directly — guildmaster's copy now carries an added `scripts/` wrapper; see [local divergence](#local-divergence--scope--challenge--deviate--summarize-delivery-vendored-directly-from-devague-2026-07-15)) | Closes the loop after an assign-to-workforce run by turning what actually happened into an accountability artifact — planned versus actual delivery, mid-work decisions, plan drift, evidence-backed delivery claims, and remaining work; runs on complete, partial, AND failed runs, reporting failure faithfully rather than smoothing it over. Verbatim (carries `type: command`). | 2026-07-15 (devague#74/#75/#76) |
+| `think` | `../guildmaster/.claude/skills/think/` | **devague** (re-broadcast via guildmaster) | idea→spec leg of the devague workflow chain. Verbatim, including `scripts/think.sh` (carries `type: command`). | 2026-09-30 (via `../jev-factory` `f441c2f` ≡ guildmaster 0.26.10) |
+| `spec-to-plan` | `../guildmaster/.claude/skills/spec-to-plan/` | **devague** (re-broadcast via guildmaster) | spec→plan leg of the devague workflow chain. Verbatim, including `scripts/spec-to-plan.sh` (carries `type: command`). | 2026-09-30 (via `../jev-factory` `f441c2f` ≡ guildmaster 0.26.10) |
+| `assign-to-workforce` | `../guildmaster/.claude/skills/assign-to-workforce/` | **devague** (re-broadcast via guildmaster) | plan→parallel-implementation leg of the devague workflow chain. Verbatim, including `scripts/assign-to-workforce.sh` (carries `type: command`). | 2026-09-30 (via `../jev-factory` `f441c2f` ≡ guildmaster 0.26.10) |
+| `scope` | `../guildmaster/.claude/skills/scope/` | **devague** (re-broadcast via guildmaster) | idea→scope leg — the optional opening move ahead of `/think`; surveys the surfaces an idea touches and seeds the Announcement Frame with cited boundary/non-goal/assumption claims. Verbatim, including `scripts/scope.sh` (carries `type: command`). | 2026-09-30 (via `../jev-factory` `f441c2f` ≡ guildmaster 0.26.10) |
+| `challenge` | `../guildmaster/.claude/skills/challenge/` | **devague** (re-broadcast via guildmaster) | Risk-scaled blind-spot pass over a converged frame BETWEEN `/think` and `/spec-to-plan`; findings routed back as proposed-only content the human adjudicates. Verbatim, including `scripts/challenge.sh` (carries `type: command`). | 2026-09-30 (via `../jev-factory` `f441c2f` ≡ guildmaster 0.26.10) |
+| `deviate` | `../guildmaster/.claude/skills/deviate/` | **devague** (re-broadcast via guildmaster) | Stops an in-flight assign-to-workforce run when execution must diverge from the confirmed plan, gets human approval, and records an append-only deviation via `devague deviate`. Verbatim, including `scripts/deviate.sh` (carries `type: command`). | 2026-09-30 (via `../jev-factory` `f441c2f` ≡ guildmaster 0.26.10) |
+| `validate-delivery` | `../guildmaster/.claude/skills/validate-delivery/` | **devague** (re-broadcast via guildmaster) | **New.** Runs the confirmed plan's behavioral tests agent-side after assign-to-workforce merges and before summarize-delivery, then files evidence / behavioral deltas as record-only entries via `devague` (`oblige` / `evidence` / `delta` / `summary`). Verbatim, including `scripts/validate-delivery.sh` (carries `type: command`). | 2026-09-30 (via `../jev-factory` `f441c2f` ≡ guildmaster 0.26.10) |
+| `summarize-delivery` | `../guildmaster/.claude/skills/summarize-delivery/` | **devague** (re-broadcast via guildmaster) | Closes the loop after an assign-to-workforce run: planned vs actual, drift, evidence-backed delivery claims, remaining work — on complete, partial, and failed runs. Verbatim, including `scripts/summarize-delivery.sh` (carries `type: command`). | 2026-09-30 (via `../jev-factory` `f441c2f` ≡ guildmaster 0.26.10) |
 | `ask-colleague` | `../colleague/.claude/skills/ask-colleague/` | **colleague** (renamed from convertible; vendored directly — guildmaster re-broadcast pending) | The first-party front door to the `colleague` CLI: hand a scoped task to a *different* engine/mind via `explore` / `review` / `write`, grade a finished work item via `feedback` (the ROI loop), and reap stale/corrupt `colleague/*` branches a crashed run left behind via `clean`. Every verb takes `--json` (result JSON on stdout, diagnostics on stderr). `explore`/`review` run isolated in a throwaway `git worktree`; `write` **previews by default** (throwaway worktree, no side effects) and refuses a dirty tree only when applying (`--apply` / `--pr`). Verbatim except one consumer-identifying clause in the Provenance paragraph (`colleague vendors from guildmaster` → `media-cli vendors from guildmaster`); already carried `type: command`. Optional runtime dep: **`colleague`** on PATH. | 2026-06-12 (colleague 1.7.0, direct) |
 
 ## Re-sync procedure
@@ -90,6 +90,13 @@ The same in-place patch also bumped the documented `devex` version floor from
 this doc's tooling-prerequisites and the `await`-era feature set) — likewise
 flagged for guildmaster on #48.
 
+**Lapsed for `assign-to-workforce` (2026-09-30):** the verbatim guildmaster
+re-sync above overwrote this repo's in-place patch, so the current copy again
+mentions `agex pr open` twice (`SKILL.md` and a usage comment in
+`scripts/assign-to-workforce.sh`). Both are prose, not invocations — the PR
+step still goes through the `cicd` skill, which calls `devex`. Left verbatim;
+the fix belongs upstream (#48).
+
 ### Local divergence — outsource → ask-colleague (2026-06-06)
 
 `convertible` was renamed **`colleague`**, and its skill `outsource` →
@@ -118,50 +125,24 @@ cp -R ../colleague/.claude/skills/ask-colleague .claude/skills/
 Once guildmaster re-broadcasts `ask-colleague`, switch the upstream column back
 to `../guildmaster/.claude/skills/ask-colleague/` and re-sync from there.
 
-### Local divergence — `scope` / `challenge` / `deviate` / `summarize-delivery` vendored directly from devague (2026-07-15)
+### Retired divergence — devague-direct vendoring (2026-07-15 → 2026-09-30)
 
-These four skills were synced (`scope`, `deviate`, `summarize-delivery`) and
-added (`challenge`, the seventh origin skill) from a **fixed devague source**
-(devague#74/#75/#76). At sync time, guildmaster's re-broadcast copies of all
-four had already picked up an added `scripts/*.sh` wrapper per skill
-(guildmaster `292feac`, "fix(skills): vendor scripts/ wrappers for 4
-script-less devague skills") that the devague originals do not carry — the
-four skills are method-only / CLI-invoking `SKILL.md`s with no entry-point
-script of their own. Diffing the vendored copies against both siblings
-confirms it: `diff -ru ../devague/.claude/skills/<skill> .claude/skills/<skill>`
-is byte-identical for all four, while the same diff against
-`../guildmaster/.claude/skills/<skill>` shows guildmaster's extra `scripts/`
-directory.
-
-So, parallel to the `ask-colleague` divergence above, these four were vendored
-**directly from the sibling `devague` checkout**
-(`../devague/.claude/skills/<skill>/`), not from guildmaster — citing
-guildmaster's copy here would silently pull in the unwanted wrapper scripts.
-This is a tracked exception to "cite guildmaster's copy". Re-sync path:
+From 2026-07-15, `scope` / `challenge` / `deviate` / `summarize-delivery` were
+vendored **directly from `../devague`** to avoid guildmaster's added
+`scripts/*.sh` wrappers (guildmaster `292feac`). On 2026-09-30 that exception
+was dropped at the operator's request: all eight devague-origin skills were
+overwritten with the guildmaster re-broadcast copies (wrappers included, and the
+new `validate-delivery` added), so they now follow the normal re-sync procedure
+above. Re-sync path:
 
 ```bash
-# Diff against both siblings before pulling, to confirm devague is still the
-# byte-identical match (i.e. guildmaster hasn't dropped the extra wrapper):
-for s in scope challenge deviate summarize-delivery; do
-  diff -ru ../devague/.claude/skills/$s .claude/skills/$s
+for s in think spec-to-plan assign-to-workforce scope challenge deviate \
+         validate-delivery summarize-delivery; do
   diff -ru ../guildmaster/.claude/skills/$s .claude/skills/$s
 done
-
-# Pull fresh from devague (the origin):
-for s in scope challenge deviate summarize-delivery; do
-  rm -rf .claude/skills/$s
-  cp -R ../devague/.claude/skills/$s .claude/skills/
-done
-# All four already carry `type: command`; no script bodies to edit (there are
-# no scripts in the devague originals) and no consumer-identifying prose to
-# adapt (each SKILL.md's Provenance section already speaks generically of
-# "downstream repos").
+# then rm -rf + cp -R per skill, as above. All eight already carry
+# `type: command`; no consumer-identifying prose to adapt.
 ```
-
-If guildmaster ever re-broadcasts these four **without** the extra `scripts/`
-wrapper (i.e. its copy goes back to matching devague byte-for-byte), switch
-the upstream column back to `../guildmaster/.claude/skills/<skill>/` and
-re-sync from there per the normal procedure.
 
 ## Tooling prerequisites
 

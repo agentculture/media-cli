@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-09-30
+
+### Added
+
+- Vendored the devague-origin `validate-delivery` skill (runs the plan's behavioral tests after assign-to-workforce and files evidence/deltas via devague)
+
+### Changed
+
+- Re-synced `scope`, `think`, `challenge`, `spec-to-plan`, `assign-to-workforce`, `deviate`, and `summarize-delivery` from the current guildmaster re-broadcast (via ../jev-factory), including the `scripts/*.sh` wrappers
+- `docs/skill-sources.md`: devague-origin skills now cite guildmaster; the devague-direct vendoring divergence is retired
+
 ## [0.6.2] - 2026-07-24
 
 ### Added
