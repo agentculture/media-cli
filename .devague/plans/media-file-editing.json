@@ -1,0 +1,1360 @@
+{
+  "slug": "media-file-editing",
+  "title": "media file editing",
+  "frame_slug": "media-file-editing",
+  "schema_version": 5,
+  "status": "exported",
+  "created": "2026-09-30T19:35:00Z",
+  "updated": "2026-09-30T19:39:48Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "media-cli lets an agent inspect and edit local video and audio files \u2014 probe info, peek at frames (optionally through lobes senses), search inside the media, cut at timestamps, blur regions, and more",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "Every capability named in the announcement (probe, peek, search, cut, blur/redact) is reachable through an installed 'media' verb, not only a Python function",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "requirement",
+      "text": "Capability is detected, never assumed: every editing verb probes for ffmpeg/ffprobe and the specific filter/encoder it needs, and fails with a typed environment error (exit 2) plus an install hint when absent \u2014 ffmpeg was absent on 2026-07-24 (CLAUDE.md:261) and present by 2026-09-19, so presence has already flipped once on this host",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "With ffmpeg removed from PATH, every editing verb exits 2 with a hint naming the missing binary \u2014 none crash, none silently no-op",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "Tests generate their own fixtures at test time with ffmpeg lavfi (testsrc + sine) and skip cleanly when ffmpeg is absent \u2014 the only media file in the workspace is /home/spark/git/test.wav (4.2s mono 44.1kHz), there is no video fixture",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "No test depends on a checked-in media binary or a file outside the repo; all fixtures are produced by lavfi inside the test run",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c6",
+      "kind": "boundary",
+      "text": "Capture stays with webcam-cli: it already ships list/stream/record writing Matroska via GStreamer (webcam-cli/CLAUDE.md:35-37) \u2014 media-cli edits files that exist, it never opens a camera or mic to make one",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "No media-cli code path opens /dev/video* or an ALSA capture device for the editing features",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c7",
+      "kind": "boundary",
+      "text": "Generation stays with innereye (text/image -> image & video, innereye#1) and harmonics-cli (non-TTS audio synthesis) \u2014 media-cli transforms existing media, it never synthesizes new content",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "No editing verb produces content that is not derived from an input file (no synthesis, no generation)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "boundary",
+      "text": "Interpretation is delegated, never owned: what a frame shows or a sound means goes to a sense/vision model (media-cli CLAUDE.md:10 'It moves bytes to and from devices. It does not interpret them'; face-recognition-cli owns face bboxes, image-only, no redaction verb) \u2014 media-cli accepts regions and timestamps as input or asks a sense for them, it runs no model itself",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "media-cli imports no ML framework and loads no model weights; every model call is an HTTP request to the lobes gateway",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c10",
+      "kind": "requirement",
+      "text": "Peeking through lobes is an optional stdlib-HTTP client to the lobes gateway (OpenAI-compatible /v1/chat/completions, model 'senses' or 'cortex', image_url parts), env-configured and fail-soft \u2014 media-cli never depends on lobes-cli as a package (no importable client exists; embodiment/pyproject.toml bans it; shabbos-goy decider/gemma.py is the precedent)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "Uninstalling lobes-cli and stopping the gateway leaves every non-sense verb fully working; sense calls return a typed error",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c11",
+      "kind": "requirement",
+      "text": "Peek works with no lobes at all: frame extraction (timestamp -> PNG, contact sheet) is a local ffmpeg operation media-cli owns; a sense only adds an optional description of frames media-cli already extracted",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "'media frames' (peek) produces images with no network access at all",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c12",
+      "kind": "requirement",
+      "text": "Blur takes explicit regions as input (rectangle(s) in pixels plus an optional time range) \u2014 media-cli does not detect what to blur; lobes has no detector/bbox endpoint and senses/cortex are VLMs whose coordinates are unvalidated",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "Redaction applies only the regions it was given (explicitly or returned by the vision model and shown in the dry-run plan) \u2014 it never invents a region",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c13",
+      "kind": "requirement",
+      "text": "Every file-writing verb (cut, blur, ...) follows the repo's dry-run convention: without --apply it prints the plan (resolved ffmpeg argv, output path, expected duration/streams) as --json; with --apply it writes a NEW output file and never overwrites the source (CLAUDE.md:366-371, README.md:77-80)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "Running any write verb without --apply leaves the filesystem byte-identical, and with --apply the source file's hash is unchanged afterwards",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c14",
+      "kind": "requirement",
+      "text": "The editing surface registers as a new noun through the four-place path (a _commands module with register(), _build_parser, an explain catalog entry per path, _VERBS + learn map) with parser_class=type(p) and a noun-level overview, so it passes the teken rubric gate (26 checks) and test_every_catalog_path_resolves",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h11",
+      "kind": "honesty",
+      "text": "teken cli doctor . --strict passes and test_every_catalog_path_resolves covers every new path",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c15",
+      "kind": "requirement",
+      "text": "ffmpeg/ffprobe run through an absolute path resolved by shutil.which, with an argv list and no shell \u2014 bandit's config skips B404/B603 but not B607 (pyproject.toml [tool.bandit])",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "No subprocess call in media_cli uses shell=True or a bare executable name; bandit passes with the existing skip list",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c16",
+      "kind": "requirement",
+      "text": "Media failures get typed treatment inside the CliError contract (exit 1 bad input: unreadable/unsupported file, timestamp out of range, region outside frame; exit 2 environment: ffmpeg missing, filter or encoder unavailable), and the ffmpeg stderr tail goes into the remediation, never a raw traceback (cli/_errors.py:21-42, _dispatch __init__.py:98-119)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "Feeding a corrupt file, an out-of-range timestamp, and an off-frame region each yields a distinct error code/message in --json with no traceback on stderr",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c17",
+      "kind": "requirement",
+      "text": "The docs that this work contradicts are corrected with it: CLAUDE.md:261 ('Absent: ffmpeg') and the Q1 claim that webcam-cli is 'a bare scaffold' are both stale as of 2026-09-30",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "After this work, CLAUDE.md no longer claims ffmpeg is absent or that webcam-cli is a bare scaffold",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c19",
+      "kind": "requirement",
+      "text": "Search is semantic as well as mechanical: an agent asks a model about image, audio or video content along the frames ('which frames have a dog') and gets back timestamps/frame ranges (user decision, resolves q2)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h15",
+      "kind": "honesty",
+      "text": "Every search hit carries its timestamp range plus the evidence it came from (frame image path or transcript chunk, caption/text, model name)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c20",
+      "kind": "requirement",
+      "text": "Editing ops include black-box redaction (not only blur), crop, speed up / slow down, fade-in / fade-out, and assembling a long video into a short with smooth transitions (user decision, resolves q3; open to more relevant ops)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "Each listed op (black box, crop, speed, fade in/out, short-with-transitions) has at least one CI test asserting its effect via ffprobe or pixel stats",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c21",
+      "kind": "requirement",
+      "text": "Long-running edits and searches run as jobs that the agent submits and then polls, ideally served by a media-cli daemon (user decision, resolves q4)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h17",
+      "kind": "honesty",
+      "text": "A job survives the submitting CLI process exiting \u2014 the agent can poll it from a fresh shell",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c22",
+      "kind": "requirement",
+      "text": "Edits are expressed as a declarative edit list (JSON timeline: segments, per-segment ops like speed/crop/redact, transitions between segments) that media-cli validates against ffprobe facts and compiles to one ffmpeg filtergraph. The dry-run prints the compiled plan; --apply submits it as a job. 'Make a short with smooth transitions' is then an edit list of N segments joined with xfade/acrossfade",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "An edit list that references a time beyond the file's duration or an unknown op is rejected at dry-run, before any ffmpeg process starts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c23",
+      "kind": "requirement",
+      "text": "Semantic search runs in two phases: (1) index \u2014 sample frames (fps/scene-change) and chunk audio, send each through lobes (senses/cortex for frames, stt for speech), and cache the results keyed by file content hash; (2) query \u2014 answer 'which frames have a dog' against the index, returning timestamps/ranges plus the evidence (frame, caption, model, confidence). Re-querying never re-runs the models",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h19",
+      "kind": "honesty",
+      "text": "A second query against an already-indexed, unchanged file makes zero calls to the gateway",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c24",
+      "kind": "requirement",
+      "text": "Speech search gets timestamps by chunking the audio into windows of <= 30s with overlap and offsetting each chunk's transcript \u2014 lobes /v1/audio/transcriptions returns text only, and whisper refuses clips > 30s (s6)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h20",
+      "kind": "honesty",
+      "text": "Transcript timestamps for a fixture with speech at a known offset > 30s land within +/- 1s of the true offset",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c25",
+      "kind": "boundary",
+      "text": "The daemon is a job runner for media-cli's own edits and indexing, not a second mesh agent \u2014 the resident mesh agent (culture.yaml backend: colleague, AGENTS.colleague.md) stays as-is; the daemon is invoked through the same 'media' CLI (e.g. submit / status / result / cancel)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h21",
+      "kind": "honesty",
+      "text": "culture.yaml and AGENTS.colleague.md are unchanged by the daemon work; the daemon registers nothing on the mesh",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c27",
+      "kind": "requirement",
+      "text": "The daemon starts on demand: the first request that needs it spawns it in the background (no explicit 'media daemon start'), and the CLI reaches it over a unix socket (user, resolves q6)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h22",
+      "kind": "honesty",
+      "text": "With no daemon running, the first submit spawns it and succeeds; a stale socket file from a dead daemon is detected and replaced, not treated as live",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c28",
+      "kind": "requirement",
+      "text": "submit returns a job id immediately; the agent polls status/result by that id (user, resolves q7)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h23",
+      "kind": "honesty",
+      "text": "submit returns before the job's ffmpeg work completes (job id first, work after)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c31",
+      "kind": "audience",
+      "text": "Mesh agents (and the operator driving them) that capture video/audio through webcam-cli / microphone-cli and need to inspect, search and cut that media without hand-writing ffmpeg",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h24",
+      "kind": "honesty",
+      "text": "The verbs are usable by an agent from 'media learn' + 'media explain' alone, without reading source",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c32",
+      "kind": "before_state",
+      "text": "Today an agent holding a captured .mkv/.wav can only shell out raw ffmpeg through shell-cli: no typed verbs, no dry-run, no JSON provenance, no way to ask 'where is the dog' \u2014 and media-cli itself ships no domain verb at all (4 commits, template verbs only)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h25",
+      "kind": "honesty",
+      "text": "The before-state claims are checkable: git log shows no domain verb, and gh search shows no editing lane elsewhere (s5, s8)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c33",
+      "kind": "after_state",
+      "text": "An agent runs 'media' verbs to probe a file, extract/peek at frames, semantically search frames and speech for timestamps, and submit a JSON edit list (cut, crop, black-box redact, blur, speed, fades, xfade transitions into a short) as a daemon job it polls by id \u2014 every step dry-run first, every result JSON with provenance",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h26",
+      "kind": "honesty",
+      "text": "Each clause of the after-state maps to at least one verb in the exported plan",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c34",
+      "kind": "why_it_matters",
+      "text": "Capture is already solved by siblings, but what an agent can DO with the captured media is not owned by anyone (no agentculture repo depends on ffmpeg/av/moviepy; 'video editing' search = 0 issues); a typed, dry-run-first surface stops agents from improvising destructive ffmpeg one-liners",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h27",
+      "kind": "honesty",
+      "text": "No sibling repo's lane statement is contradicted by the new lane text in issue #1 / CLAUDE.md / README",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c35",
+      "kind": "success_signal",
+      "text": "On a lavfi-generated 10s fixture: 'media probe' returns duration within 0.1s and every stream as JSON; a cut from 2.0s-5.0s yields an output whose ffprobe duration is 3.0s +/- 0.1s; a black-box redact leaves the region's mean pixel value < 5 while outside the box is unchanged \u2014 all in CI with ffmpeg present, and skipped cleanly (not failed) without it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h28",
+      "kind": "honesty",
+      "text": "The thresholds are enforced by assertions in the test suite, not just observed manually",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c36",
+      "kind": "success_signal",
+      "text": "A semantic query ('frames with a red square') against a fixture with a red square inserted at 4.0s-6.0s returns a range overlapping 4.0-6.0s via senses on a live gateway, and returns a typed exit-2 'sense unavailable' error (not a traceback, not an empty result) when no gateway is reachable",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h29",
+      "kind": "honesty",
+      "text": "The live-gateway check is a documented, opt-in test (marker) so CI without a gateway still passes",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c37",
+      "kind": "success_signal",
+      "text": "submit returns a job id in < 1s with no daemon running beforehand (on-demand spawn over the unix socket); status/result for that id return a single JSON document each; the teken rubric gate stays 100% (26+/26+) with the new nouns",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h30",
+      "kind": "honesty",
+      "text": "The rubric gate check count is recorded before and after, and the after count shows zero failures",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c39",
+      "kind": "requirement",
+      "text": "Cuts are frame-accurate by default (re-encode at the cut boundaries); stream-copy is only used when both cut points land on keyframes, or when the agent explicitly asks for a fast inexact cut and the dry-run reports the actual snapped start/end",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h32",
+      "kind": "honesty",
+      "text": "On a g=250 fixture, a default 2.0-5.0s cut measures 3.0s +/- 1 frame by ffprobe",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c40",
+      "kind": "requirement",
+      "text": "The ffmpeg filtergraph is compiled only from an allowlist of filters with typed numeric/enum parameters; no edit-list string is ever interpolated into a filtergraph. Source/IO filters (movie, amovie, zmq, azmq, sendcmd) are never emitted, and input/output paths are passed as argv entries, never inside filter strings",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h33",
+      "kind": "honesty",
+      "text": "A fuzz test feeding edit-list values containing ',', ';', '[', '=' and 'movie=' either rejects them at validation or produces a filtergraph with none of those filters, and no file outside the declared inputs is opened",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c41",
+      "kind": "requirement",
+      "text": "Redaction fails closed: a redacted output is always re-encoded (never stream-copied); streams media-cli cannot redact (subtitles, attachments/cover art, data streams) and container metadata are dropped, unless explicitly kept; the result reports which streams were kept or dropped",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h34",
+      "kind": "honesty",
+      "text": "Redacting a fixture that carries a subtitle stream, a cover-art attachment and a title metadata tag yields an output with none of them, unless they were explicitly kept",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c42",
+      "kind": "requirement",
+      "text": "Model-derived redaction reports its coverage: regions from senses are sampled at N fps, so the dry-run and result state the sampling rate, how regions are held or interpolated between samples, and any frames where no detection ran \u2014 the agent never gets an implied 'fully redacted' it can't verify",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h31",
+      "kind": "honesty",
+      "text": "A redaction test with a moving target shows no frame where the target is uncovered at the configured sampling rate, or the result explicitly lists the uncovered frame ranges",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c43",
+      "kind": "requirement",
+      "text": "Outputs are written to a temp file in the destination directory and atomically renamed on success; an existing output path is refused unless --overwrite is given (and the source path is refused outright); a killed or cancelled job leaves no partial file at the output path",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h35",
+      "kind": "honesty",
+      "text": "Killing the daemon mid-encode leaves no file at the output path, and submitting to an existing output path without --overwrite is refused at dry-run",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c44",
+      "kind": "requirement",
+      "text": "Daemon spawn is race-free and private: concurrent first requests elect a single daemon via an exclusive lock; the socket lives under $XDG_RUNTIME_DIR (0700 on this host) with mode 0600, and the daemon rejects peers whose SO_PEERCRED uid differs from its own",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h36",
+      "kind": "honesty",
+      "text": "Ten concurrent submits against no running daemon produce exactly one daemon process and ten job ids",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c45",
+      "kind": "requirement",
+      "text": "The daemon has a bounded lifecycle: it exits after an idle timeout with no queued/running jobs, it caps concurrent jobs (default 1 encode), and cancelling or shutting down kills the job's ffmpeg process group \u2014 no orphaned ffmpeg survives the daemon",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h37",
+      "kind": "honesty",
+      "text": "After cancel, and again after daemon SIGTERM, pgrep finds no ffmpeg child of the daemon",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c47",
+      "kind": "requirement",
+      "text": "Indexing and encoding are budgeted: the dry-run of an index/search job estimates sense calls (sampled frames + audio chunks) and refuses above a configurable cap unless raised; sense calls are rate-limited and back off on 429/502/503; encodes default to CPU with a single concurrent job so media work does not starve the co-resident lobes vLLM",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h38",
+      "kind": "honesty",
+      "text": "Dry-running an index of a 1-hour fixture reports the exact number of sense calls it would make, and exceeding the cap is refused before any call is sent",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c48",
+      "kind": "requirement",
+      "text": "The search index cache key includes the file content hash AND the sense identity (role, served model name, prompt/template version, sampling params), so a model or prompt change never serves stale captions; the cache lives under $XDG_CACHE_HOME/media-cli with a size cap, and is inspectable and purgeable per file via a verb",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h39",
+      "kind": "honesty",
+      "text": "Changing the served model name (or the caption prompt version) on an already-indexed file triggers re-indexing, and a purge verb removes every cached artifact for that file hash",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c50",
+      "kind": "requirement",
+      "text": "All timestamps media-cli accepts and returns are seconds from the first presented frame (normalized for container start_time), with the frame index alongside; VFR input is handled by PTS, not frame-count x fps",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h40",
+      "kind": "honesty",
+      "text": "On a fixture with a non-zero container start_time and variable frame rate, a search hit's timestamp fed straight back into a cut selects the same frame",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c51",
+      "kind": "requirement",
+      "text": "Every job keeps a retained record: the compiled ffmpeg argv, ffmpeg's stderr log, sense calls made, and timings; 'status' reports progress (from ffmpeg -progress) and 'result' includes the log path, so a failed or wrong edit can be diagnosed after the fact",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h41",
+      "kind": "honesty",
+      "text": "A deliberately failing job (bad codec) yields a result whose remediation quotes the ffmpeg error and whose log path exists and is readable",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c52",
+      "kind": "requirement",
+      "text": "Introspection and read-only verbs (help, overview, explain, learn, doctor, probe, job status of a non-existent daemon) never spawn the daemon; only submit does \u2014 so the teken rubric gate and CI never leave a daemon running",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h42",
+      "kind": "honesty",
+      "text": "After a full 'teken cli doctor . --strict' run and the full pytest suite, no media daemon process or socket remains",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c56",
+      "kind": "requirement",
+      "text": "Concrete output rule: the output container = the source container; streams an edit leaves untouched are stream-copied; streams an edit changes are re-encoded to a codec that container accepts, preferring the source codec when it has a usable encoder (e.g. mkv: vp8 -> vp8/libvpx, else H.264; opus stays opus), and falling back to mkv (which holds anything) only when the source container cannot carry the result. The dry-run states every per-stream copy/re-encode choice",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h43",
+      "kind": "honesty",
+      "text": "An mkv (vp8 + opus) input cut and redacted comes out as mkv with an opus track that was stream-copied where untouched, and the dry-run lists each stream's copy/re-encode decision",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "ffmpeg tool layer: resolve, capability-probe, run",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/_tools.py resolves ffmpeg/ffprobe via shutil.which to absolute paths and caches the result",
+        "has_filter(name)/has_encoder(name) parse 'ffmpeg -hide_banner -filters/-encoders' and answer correctly for boxblur, drawbox, xfade, libx264 on a host that has them",
+        "run(argv) uses a list argv, never shell=True; a missing binary raises the typed env error (exit 2) whose remediation names the binary (test: monkeypatch PATH to empty)",
+        "tests/test_media_tools.py passes; bandit passes with the unchanged skip list"
+      ],
+      "deps": [
+        "t2"
+      ],
+      "covers": [
+        "c3",
+        "h2",
+        "c15",
+        "h12"
+      ],
+      "instruction": "Own only media_cli/media/_tools.py and tests/test_media_tools.py (the package __init__.py belongs to t2). Raise MediaEnvError/MediaInputError from media_cli/media/errors.py. Never import anything outside the stdlib."
+    },
+    {
+      "id": "t2",
+      "summary": "Typed media errors inside the CliError contract",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/errors.py defines MediaInputError (exit 1) and MediaEnvError (exit 2), both subclasses of CliError, each carrying a stable machine code (e.g. 'input.unreadable', 'input.timestamp_out_of_range', 'input.region_outside_frame', 'env.ffmpeg_missing', 'env.filter_unavailable', 'env.sense_unavailable', 'env.sense_not_local')",
+        "--json error output includes the machine code alongside code/message/remediation; existing tests/test_cli*.py still pass unchanged",
+        "an ffmpeg_failure(stderr) helper puts the last ~20 lines of ffmpeg stderr in remediation, never a traceback"
+      ],
+      "deps": [],
+      "covers": [
+        "c16"
+      ],
+      "instruction": "Create the new package: own media_cli/media/__init__.py, media_cli/media/errors.py, media_cli/cli/_errors.py and tests/test_media_errors.py. Extend CliError minimally (an optional 'kind' string field emitted in to_dict when set); keep the exit-code constants and existing behaviour byte-identical for current callers."
+    },
+    {
+      "id": "t3",
+      "summary": "Test fixtures synthesized with lavfi",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "tests/conftest.py provides fixtures that generate, into tmp_path: a 10s testsrc+sine mp4 (h264 g=250 + aac); an mkv (vp8 + opus); a variant with non-zero start_time and VFR; one with a red square drawn at 4.0-6.0s; one carrying a subtitle stream, a cover-art attachment and a title tag",
+        "every fixture is skipped (pytest.skip, not failed) when ffmpeg is absent; no media file is checked into the repo",
+        "a 'live_gateway' pytest marker is honoured: such tests are skipped unless MEDIA_CLI_LIVE_GATEWAY=1"
+      ],
+      "deps": [],
+      "covers": [
+        "c5",
+        "h3"
+      ],
+      "instruction": "Own tests/conftest.py and tests/test_fixtures.py only. Session-scope the fixtures so each file is generated once per run. Generate files with ffmpeg -f lavfi (testsrc, sine, drawbox with enable='between(t,4,6)'). Add a tiny SRT, write it in via -i and -map; attach cover art as an attached_pic stream."
+    },
+    {
+      "id": "t4",
+      "summary": "CI: ffmpeg on the runner + pytest markers",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        ".github/workflows/tests.yml installs ffmpeg (apt-get install -y ffmpeg) in the test job before pytest, so ffmpeg-backed tests run in CI rather than skipping",
+        "pyproject.toml [tool.pytest.ini_options] registers the 'live_gateway' marker; 'pytest -m live_gateway' collects only the opt-in tests and CI never selects them"
+      ],
+      "deps": [],
+      "covers": [
+        "h29"
+      ],
+      "instruction": "Own .github/workflows/tests.yml and the [tool.pytest.ini_options] table in pyproject.toml only. Do NOT bump the version here; the PR bump happens once at the end."
+    },
+    {
+      "id": "t5",
+      "summary": "Probe + single time base",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/probe.py probe(path) runs ffprobe -print_format json and returns format + per-stream facts (codec, type, duration, fps, width/height, sample_rate, start_time)",
+        "all returned times are seconds from the first presented frame (container start_time subtracted); to_frame_index(t) and to_seconds(frame) round-trip on the VFR + non-zero start_time fixture",
+        "an unreadable or corrupt file raises MediaInputError('input.unreadable')"
+      ],
+      "deps": [
+        "t1",
+        "t2",
+        "t3"
+      ],
+      "covers": [
+        "c50",
+        "h40"
+      ],
+      "instruction": "Own media_cli/media/probe.py and tests/test_media_probe.py. Get VFR frame times from ffprobe -show_entries frame=pts_time (read lazily, only when a frame-index mapping is requested)."
+    },
+    {
+      "id": "t6",
+      "summary": "lobes senses client: local-only, fail-soft, rate-limited",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/senses.py talks to the gateway with urllib only (URL from MEDIA_CLI_LOBES_URL, else 'lobes endpoint <role> --json' if lobes is on PATH, else http://localhost:8001; key from MEDIA_CLI_LOBES_KEY)",
+        "before the first call it checks GET /capabilities and refuses with MediaEnvError('env.sense_not_local') when the role is not served on this machine (proxied/suffixed peer lane), so captured media never leaves the host",
+        "describe_images(paths, prompt) and transcribe(wav) exist; connect errors and timeouts raise MediaEnvError('env.sense_unavailable'); 429/502/503 back off with bounded retries",
+        "a test asserts no ML framework (torch, transformers, cv2, numpy) is imported by media_cli; all sense tests use a local stub HTTP server, not a live gateway"
+      ],
+      "deps": [
+        "t2"
+      ],
+      "covers": [
+        "c10",
+        "h7",
+        "c8",
+        "h6"
+      ],
+      "instruction": "Own media_cli/media/senses.py and tests/test_media_senses.py. Follow the shape of shabbos-goy's decider/gemma.py (stdlib urllib, JSON response, typed failure). The /capabilities payload shape is unconfirmed (lobes#278): parse it defensively and write the local-vs-proxied check against a recorded sample kept as a test constant. The gateway on this host is http://localhost:8001."
+    },
+    {
+      "id": "t7",
+      "summary": "Output writer: atomic, collision-safe, container/codec rule",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/output.py plan_output(src, dst, touched_streams) returns per-stream copy/re-encode decisions: output container = source container; untouched streams are stream-copied; changed streams use the source codec when an encoder exists (vp8->libvpx, opus->libopus, h264->libx264), else H.264; fall back to mkv only when the container can't carry the result",
+        "the output goes to a temp file in the destination dir and is renamed on success; an existing dst is refused unless overwrite=True; dst == src is always refused; a failure or kill leaves no file at dst"
+      ],
+      "deps": [
+        "t5"
+      ],
+      "covers": [
+        "c43",
+        "h35",
+        "c56"
+      ],
+      "instruction": "Own media_cli/media/output.py and tests/test_media_output.py. Simulate a kill by raising mid-write and asserting dst is absent and the temp file is cleaned up."
+    },
+    {
+      "id": "t8",
+      "summary": "Edit-list schema + validation",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/editlist.py parses a JSON edit list: {input, output, segments:[{start,end,ops:[...]}], transitions:[{type:'xfade'|'acrossfade', duration}]}, with ops drawn from a fixed enum",
+        "validation against probe facts rejects out-of-range times, end <= start, unknown ops, non-numeric params and regions outside the frame, raising MediaInputError with the offending JSON path, before any ffmpeg process starts",
+        "validate() is pure: a test asserts no subprocess is spawned"
+      ],
+      "deps": [
+        "t5"
+      ],
+      "covers": [
+        "c22",
+        "h18"
+      ],
+      "instruction": "Own media_cli/media/editlist.py and tests/test_media_editlist.py. Every op parameter is typed (float seconds, int pixels, enum names); reject strings anywhere a number is expected. That is the first half of the filter-injection defence (c40)."
+    },
+    {
+      "id": "t9",
+      "summary": "Frame peek: extract frames + contact sheet locally",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/frames.py extract(path, times|every=N|scene=thr, outdir) writes PNGs named by timestamp and returns [{t, frame_index, path}]; contact_sheet() tiles them with the tile filter",
+        "works with networking disabled (test monkeypatches urllib/socket to raise) and never imports senses"
+      ],
+      "deps": [
+        "t5",
+        "t7"
+      ],
+      "covers": [
+        "c11",
+        "h8"
+      ],
+      "instruction": "Own media_cli/media/frames.py and tests/test_media_frames.py. Use -ss before -i per timestamp for speed, select='gt(scene,thr)' for scene sampling, and write via output.py's atomic helper."
+    },
+    {
+      "id": "t10",
+      "summary": "Filtergraph compiler: allowlist, cut, concat, argv",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/compile.py compiles a validated edit list to one ffmpeg argv: inputs/outputs as argv entries, filtergraph built only from an allowlisted filter table with typed params; movie, amovie, zmq, azmq and sendcmd can never be emitted",
+        "a fuzz test feeding ',', ';', '[', '=', \"'\" and 'movie=' into every string-accepting field either fails validation or yields a graph containing none of them",
+        "cuts are frame-accurate by default (trim/atrim + re-encode): a 2.0-5.0s cut of the g=250 fixture measures 3.0s +/- 1 frame; fast=True stream-copies only when both points are keyframes, otherwise it reports the snapped start/end",
+        "op modules are dispatched via a fixed registry in compile.py that maps op names to media_cli/media/ops/{visual,redact,compose}.py; each module ships as a stub raising MediaInputError('input.op_not_implemented') until its own task fills it"
+      ],
+      "deps": [
+        "t1",
+        "t7",
+        "t8"
+      ],
+      "covers": [
+        "c40",
+        "h33",
+        "c39",
+        "h32"
+      ],
+      "instruction": "Own media_cli/media/compile.py, media_cli/media/ops/__init__.py, stub files media_cli/media/ops/{visual,redact,compose}.py (each exposing def build(op, ctx) -> list[FilterNode]), and tests/test_media_compile.py. Later tasks replace only the stub bodies, so keep the stub signature stable. Define FilterNode(name, params: dict[str, int|float|enum]) and render params with strict numeric formatting."
+    },
+    {
+      "id": "t11",
+      "summary": "Visual ops: crop, speed, fade",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/ops/visual.py implements crop{x,y,w,h}, speed{factor 0.25-4.0} (setpts + chained atempo keeps A/V in sync) and fade{in|out, duration} (fade + afade)",
+        "tests/test_ops_visual.py proves each op via ffprobe or pixel stats: crop yields the requested w x h; speed 2.0 halves duration +/- 1 frame; fade-in's first frame has mean luma < 5"
+      ],
+      "deps": [
+        "t10"
+      ],
+      "covers": [
+        "c20",
+        "h16"
+      ],
+      "instruction": "Own media_cli/media/ops/visual.py and tests/test_ops_visual.py only. atempo accepts 0.5-2.0 per instance, so chain instances for factors outside that range."
+    },
+    {
+      "id": "t12",
+      "summary": "Redaction ops: black box, blur, fail-closed streams",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/ops/redact.py implements box{regions:[{x,y,w,h,start?,end?}], fill:black} via drawbox t=fill and blur{regions, strength} via crop+boxblur+overlay, applying ONLY the given regions",
+        "a redacted output is always re-encoded; subtitle, attachment and data streams and container metadata are dropped unless keep=[...] names them; the result lists kept and dropped streams",
+        "tests: the black box region's mean pixel value < 5 and outside the box is unchanged (PSNR > 40); the subtitle + cover-art + title fixture comes out with none of them"
+      ],
+      "deps": [
+        "t10"
+      ],
+      "covers": [
+        "c12",
+        "h9",
+        "c41",
+        "h34",
+        "c20",
+        "h16"
+      ],
+      "instruction": "Own media_cli/media/ops/redact.py and tests/test_ops_redact.py only. Emit -map_metadata -1 and explicit -map for the kept A/V streams."
+    },
+    {
+      "id": "t13",
+      "summary": "Compose op: short with smooth transitions",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/ops/compose.py joins N segments with xfade (video) + acrossfade (audio), computing offsets from segment durations; supported transitions are an enum (fade, dissolve, wipeleft, slideleft)",
+        "a test assembles 3 segments of 2s with 0.5s transitions into an output whose duration is 5.0s +/- 1 frame, with audio and video durations equal within 1 frame"
+      ],
+      "deps": [
+        "t10"
+      ],
+      "covers": [
+        "c20",
+        "h16"
+      ],
+      "instruction": "Own media_cli/media/ops/compose.py and tests/test_ops_compose.py only. xfade requires matching resolution, fps and pixel format, so normalize every segment (scale, fps, format) before chaining."
+    },
+    {
+      "id": "t14",
+      "summary": "Speech search: chunked stt with offsets",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/speech.py extracts audio to 16 kHz mono WAV chunks of <= 30s with 2s overlap, transcribes each via senses.transcribe, and returns [{start, end, text}] with times offset by the chunk start; overlap duplicates are merged",
+        "unit tests use a stub transcriber and assert chunk boundaries and offsets for a 75s input; the +/- 1s real-speech check lives in a live_gateway-marked test"
+      ],
+      "deps": [
+        "t1",
+        "t6"
+      ],
+      "covers": [
+        "c24",
+        "h20"
+      ],
+      "instruction": "Own media_cli/media/speech.py and tests/test_media_speech.py. The gateway returns text only, so treat each chunk's time span as the result's time range. There is no speech fixture generator, so the live test needs a recorded speech clip passed via MEDIA_CLI_SPEECH_FIXTURE."
+    },
+    {
+      "id": "t15",
+      "summary": "Search index: sampled-frame captions + cache + budget",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/index.py build_index(path, fps|scene, dry_run) samples frames via frames.py, captions them in batches via senses, and stores {t, frame_path, caption, model, prompt_version} under $XDG_CACHE_HOME/media-cli/index/<key>/, with a schema_version",
+        "the cache key = file fingerprint (size + mtime + inode + head/tail sample hash) + sense identity (role, served model, prompt version, sampling params); a model or prompt change re-indexes, and an unchanged file makes zero gateway calls (stub server counts requests)",
+        "dry_run reports the exact planned sense-call count; above the cap (default 600, configurable) it raises MediaInputError('input.budget_exceeded') before any call; purge(path) deletes every cached artifact for that file; a total size cap evicts least-recently-used"
+      ],
+      "deps": [
+        "t6",
+        "t9"
+      ],
+      "covers": [
+        "c23",
+        "h19",
+        "c48",
+        "h39",
+        "c47",
+        "h38"
+      ],
+      "instruction": "Own media_cli/media/index.py and tests/test_media_index.py. Use a stub HTTP server for senses. Tie-in with c49: the fingerprint avoids a full-file hash per query (hash timing was never measured, lapse l2), so keep the full hash out of the hot path."
+    },
+    {
+      "id": "t16",
+      "summary": "Semantic query with evidence",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/search.py query(path, text, modality=frames|speech|all) returns hits [{start, end, frame_index?, evidence:{kind, frame_path|transcript, caption|text, model}, score}], merging adjacent matching samples into ranges",
+        "frame matching sends each cached caption with the query to senses for a yes/no + confidence (batched), not substring matching; speech matching runs over the chunked transcript",
+        "a live_gateway test finds the red-square fixture's 4.0-6.0s range (overlap required); with no gateway reachable, the call raises MediaEnvError('env.sense_unavailable')"
+      ],
+      "deps": [
+        "t14",
+        "t15"
+      ],
+      "covers": [
+        "c19",
+        "h15",
+        "c36"
+      ],
+      "instruction": "Own media_cli/media/search.py and tests/test_media_search.py. Without a live gateway, test against the stub server returning canned yes/no answers."
+    },
+    {
+      "id": "t17",
+      "summary": "Model-derived redaction regions with coverage report",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/regions.py find_regions(path, description, fps) asks senses for pixel boxes on sampled frames, validates them (inside the frame, positive size, clamped), and holds or interpolates between samples",
+        "the result carries coverage: {sample_fps, method:'hold'|'linear', frames_without_detection:[ranges], rejected_boxes:[...]}; the dry-run shows every region before any render",
+        "a test with a moving-square fixture and a stub sense returning the true boxes shows no uncovered frame at the configured fps, or lists the uncovered ranges explicitly"
+      ],
+      "deps": [
+        "t6",
+        "t9",
+        "t12"
+      ],
+      "covers": [
+        "c42",
+        "h31"
+      ],
+      "instruction": "Own media_cli/media/regions.py and tests/test_media_regions.py. The model is Gemma 4 via the senses role (decision c26). Ask for JSON boxes in pixel coordinates via response_format and discard malformed output rather than guessing."
+    },
+    {
+      "id": "t18",
+      "summary": "Job store: records, logs, schema version",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/daemon/jobs.py persists one JSON record per job under $XDG_STATE_HOME/media-cli/jobs/<id>.json (schema_version, kind, state queued|running|done|failed|cancelled, argv, sense_calls, timings, progress, output, error) plus <id>.log for ffmpeg stderr",
+        "job ids are unique and sortable; records survive a process restart; a failed job's error carries the ffmpeg stderr tail and the log path"
+      ],
+      "deps": [
+        "t2"
+      ],
+      "covers": [
+        "c51",
+        "h41",
+        "c28"
+      ],
+      "instruction": "Own media_cli/media/daemon/__init__.py, media_cli/media/daemon/jobs.py and tests/test_daemon_jobs.py. Write records atomically (temp + rename)."
+    },
+    {
+      "id": "t19",
+      "summary": "Daemon server: unix socket, single instance, bounded lifecycle",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/daemon/server.py serves line-delimited JSON requests (submit, status, result, cancel, ping) on a 0600 unix socket and rejects peers whose SO_PEERCRED uid differs from its own",
+        "single instance: an exclusive flock on <sockdir>/daemon.lock; ten concurrent spawners yield exactly one daemon process",
+        "runs at most N (default 1) encodes at once; each ffmpeg starts in its own process group; cancel and SIGTERM kill the group (pgrep finds no orphan); it exits after an idle timeout (default 300s) with an empty queue",
+        "it registers nothing on the Culture mesh; culture.yaml and AGENTS.colleague.md are untouched"
+      ],
+      "deps": [
+        "t18"
+      ],
+      "covers": [
+        "c44",
+        "h36",
+        "c45",
+        "h37",
+        "c25",
+        "h21"
+      ],
+      "instruction": "Own media_cli/media/daemon/server.py and tests/test_daemon_server.py. Use stdlib socketserver/selectors + threading. Parse ffmpeg -progress pipe:1 output into the job record's progress field."
+    },
+    {
+      "id": "t20",
+      "summary": "Daemon client: spawn on demand, socket dir fallback",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/media/daemon/client.py submit() connects to the socket; if absent or stale (connect refused), it takes the lock and spawns 'python -m media_cli.media.daemon' detached (setsid, stdio to the log), then retries; submit returns a job id in < 1s",
+        "the socket dir is $XDG_RUNTIME_DIR/media-cli, falling back to a 0700 ~/.cache/media-cli/run when XDG_RUNTIME_DIR is unset (decision c54)",
+        "only submit may spawn; status/result/cancel against no daemon read the job store directly or return a typed 'no daemon' result; a job survives the submitting process exiting and can be polled from a fresh process"
+      ],
+      "deps": [
+        "t19"
+      ],
+      "covers": [
+        "c27",
+        "h22",
+        "c37",
+        "h23",
+        "h17",
+        "c21",
+        "c52"
+      ],
+      "instruction": "Own media_cli/media/daemon/client.py, media_cli/media/daemon/__main__.py and tests/test_daemon_client.py. Tests must use a tmp XDG_RUNTIME_DIR and kill any daemon they start (fixture teardown)."
+    },
+    {
+      "id": "t21",
+      "summary": "CLI: probe + frames verbs",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/cli/_commands/probe.py registers 'probe <file> [--json]'; media_cli/cli/_commands/frames.py registers 'frames <file> --at T... | --every N | --scene THR --out DIR [--sheet] [--describe] [--json]' (--describe calls senses, is optional and fail-soft)",
+        "both are read-only toward the source, never touch the daemon, print one JSON document on stdout and nothing on stderr on success; tests/test_cli_media_readonly.py covers the success and error paths"
+      ],
+      "deps": [
+        "t5",
+        "t9"
+      ],
+      "covers": [],
+      "instruction": "Own only those two command modules and their test file. Expose register(sub) exactly as the existing _commands modules do. Do NOT edit cli/__init__.py, the catalog, overview or learn; t23 wires them in. Tests build a throwaway parser that calls register() directly."
+    },
+    {
+      "id": "t22",
+      "summary": "CLI: edit, search, job nouns (dry-run first)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/cli/_commands/edit.py: 'edit plan <editlist.json>' validates + compiles and prints the full plan (argv, per-stream decisions, output path, redaction coverage) and writes nothing; 'edit apply <editlist.json> --apply' submits a job and prints {job_id}; without --apply it behaves like plan",
+        "media_cli/cli/_commands/search.py: 'search index <file> [--fps|--scene] [--apply]' (dry-run shows the sense-call estimate) and 'search query <file> <text> [--modality]'; media_cli/cli/_commands/job.py: 'job status|result|cancel|list'",
+        "every noun uses add_subparsers(parser_class=type(p)) and exposes an 'overview' subverb; a test proves a dry run leaves the filesystem byte-identical and --apply never changes the source file's hash"
+      ],
+      "deps": [
+        "t10",
+        "t11",
+        "t12",
+        "t13",
+        "t16",
+        "t17",
+        "t20"
+      ],
+      "covers": [
+        "c13",
+        "h10"
+      ],
+      "instruction": "Own media_cli/cli/_commands/{edit,search,job}.py and tests/test_cli_media_write.py. Do NOT edit cli/__init__.py, the catalog, overview or learn. Follow _commands/cli.py:30-43 for the noun-group pattern."
+    },
+    {
+      "id": "t23",
+      "summary": "Wire the surface + rewrite self-docs (prog=media)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "media_cli/cli/__init__.py registers probe, frames, edit, search and job; prog is 'media' (the installed command), and the parser description, learn purpose and explain catalog describe the device-plane + media-editing agent, not the template",
+        "media_cli/explain/catalog.py has an entry for every registered path (both ('media',) and ('media-cli',) keys kept); overview _VERBS and the learn command map list every new verb; test_every_catalog_path_resolves passes",
+        "'uv run teken cli doctor . --strict' passes with zero failures, with the check count recorded in the PR body before and after; every clause of the spec's after-state maps to a verb shown by 'media learn'"
+      ],
+      "deps": [
+        "t21",
+        "t22"
+      ],
+      "covers": [
+        "c1",
+        "h1",
+        "c14",
+        "h11",
+        "c31",
+        "h24",
+        "c33",
+        "h26",
+        "h30"
+      ],
+      "instruction": "Own media_cli/cli/__init__.py, media_cli/explain/catalog.py, media_cli/cli/_commands/overview.py, media_cli/cli/_commands/learn.py and tests/test_cli.py / tests/test_cli_introspection.py (update expectations for the new prog). Write the catalog entries as agent-facing docs: flags, JSON shapes, dry-run/--apply, exit codes."
+    },
+    {
+      "id": "t24",
+      "summary": "Docs + lane statement",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "CLAUDE.md: the lane section says media-cli owns the device plane AND editing of captured media; the stale 'Absent: ffmpeg' (was :261) and 'webcam-cli is a bare scaffold' claims are corrected; the architecture section describes media_cli/media/ and the daemon",
+        "README.md and the pyproject description state the expanded lane; the compose-not-absorb table still names webcam-cli (capture), innereye/harmonics-cli (generation), shell-cli (generic exec) as owners, contradicting no sibling",
+        "a comment on media-cli issue #1 records the lane expansion and links the spec (posted via the communicate/cicd scripts only after the user approves the text); markdownlint is clean"
+      ],
+      "deps": [
+        "t23"
+      ],
+      "covers": [
+        "c17",
+        "h14",
+        "c34",
+        "h27",
+        "c32",
+        "h25"
+      ],
+      "instruction": "Own CLAUDE.md, README.md and the [project] description line of pyproject.toml. Draft the issue #1 comment into the PR body for approval; do not post it unilaterally."
+    },
+    {
+      "id": "t25",
+      "summary": "End-to-end acceptance suite",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "tests/test_e2e_media.py drives the installed 'media' command on lavfi fixtures: probe duration within 0.1s; a 2-5s cut = 3.0s +/- 0.1; black-box mean < 5; an mkv (vp8+opus) cut + redact stays mkv with opus stream-copied where untouched",
+        "submit with no daemon returns a job id in < 1s, status/result are single JSON documents, and a corrupt file, an out-of-range timestamp and an off-frame region each give a distinct machine code in --json with empty stderr tracebacks",
+        "after the suite and a 'teken cli doctor . --strict' run, no media daemon process or socket remains; a static test asserts media_cli never opens /dev/video* or ALSA capture and no verb synthesizes content without an input file"
+      ],
+      "deps": [
+        "t23"
+      ],
+      "covers": [
+        "c35",
+        "h28",
+        "c37",
+        "h13",
+        "h42",
+        "h43",
+        "c6",
+        "h4",
+        "c7",
+        "h5"
+      ],
+      "instruction": "Own tests/test_e2e_media.py only. Use subprocess against 'uv run media', a tmp XDG_RUNTIME_DIR/XDG_STATE_HOME/XDG_CACHE_HOME, and a teardown that kills any daemon started."
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "NVENC on GB10 is unverified (frame v2); plan encodes default to CPU libx264. A probe encode gates any later hardware path, and no task depends on it",
+      "kind": "unknown_nonblocking",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "The lobes /capabilities payload shape and the image wire contract are unwritten (lobes#278, frame v1). t6's local-vs-proxied check is written against a recorded sample and may need adjusting against the live gateway",
+      "kind": "unknown_nonblocking",
+      "task_id": "t6",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r3",
+      "text": "The h20 +/- 1s speech-offset check needs a recorded speech clip (no lavfi generator), so it only runs as an opt-in live_gateway test with MEDIA_CLI_SPEECH_FIXTURE",
+      "kind": "unknown_nonblocking",
+      "task_id": "t14",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r4",
+      "text": "Multimodal embeddings (lobes-cli#289) and sound-event search (lobes-cli#290) are follow-ups outside this plan; v1 is caption-then-match and speech-only by decision",
+      "kind": "follow_up",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r5",
+      "text": "Residual from /challenge (frame v7): corrupt/truncated captures, > 1h inputs, HDR/10-bit, multi-audio-track files and the gateway auth key have no fixture. t25 covers corrupt input only",
+      "kind": "unknown_nonblocking",
+      "task_id": "t25",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r6",
+      "text": "The media-cli version bump + CHANGELOG happen once, in the final PR (version-check CI), not per task",
+      "kind": "follow_up",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    }
+  ],
+  "obligations": [
+    {
+      "id": "o1",
+      "task_id": "t2",
+      "criterion_index": 1,
+      "criterion_snapshot": "media_cli/media/errors.py defines MediaInputError (exit 1) and MediaEnvError (exit 2), both subclasses of CliError, each carrying a stable machine code (e.g. 'input.unreadable', 'input.timestamp_out_of_range', 'input.region_outside_frame', 'env.ffmpeg_missing', 'env.filter_unavailable', 'env.sense_unavailable', 'env.sense_not_local')",
+      "seam": "media_cli.media.errors -> every engine module and CLI verb",
+      "behavior": "Machine error codes (input.*, env.*) are stable strings, and every media failure surfaces as exit 1 (input) or 2 (environment) with one of them. No bare Exception or traceback reaches stderr",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o2",
+      "task_id": "t1",
+      "criterion_index": 3,
+      "criterion_snapshot": "run(argv) uses a list argv, never shell=True; a missing binary raises the typed env error (exit 2) whose remediation names the binary (test: monkeypatch PATH to empty)",
+      "seam": "media_cli.media._tools.run -> subprocess",
+      "behavior": "Every ffmpeg/ffprobe invocation is an absolute-path argv list with shell=False. No other module calls subprocess directly for media binaries",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o3",
+      "task_id": "t5",
+      "criterion_index": 2,
+      "criterion_snapshot": "all returned times are seconds from the first presented frame (container start_time subtracted); to_frame_index(t) and to_seconds(frame) round-trip on the VFR + non-zero start_time fixture",
+      "seam": "probe time base -> search hits -> edit-list times",
+      "behavior": "A timestamp returned by search, fed unchanged into an edit list, selects the same frame (seconds from the first presented frame, with start_time normalized)",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o4",
+      "task_id": "t6",
+      "criterion_index": 2,
+      "criterion_snapshot": "before the first call it checks GET /capabilities and refuses with MediaEnvError('env.sense_not_local') when the role is not served on this machine (proxied/suffixed peer lane), so captured media never leaves the host",
+      "seam": "senses client -> lobes gateway (network egress)",
+      "behavior": "No frame, audio chunk or caption is sent unless GET /capabilities shows the role served on this machine; otherwise env.sense_not_local is raised before any media byte leaves the process",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o5",
+      "task_id": "t7",
+      "criterion_index": 2,
+      "criterion_snapshot": "the output goes to a temp file in the destination dir and is renamed on success; an existing dst is refused unless overwrite=True; dst == src is always refused; a failure or kill leaves no file at dst",
+      "seam": "output writer -> filesystem",
+      "behavior": "The source file is never opened for writing; dst is either the complete result or absent, never partial; an existing dst is untouched unless overwrite was requested",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o6",
+      "task_id": "t8",
+      "criterion_index": 2,
+      "criterion_snapshot": "validation against probe facts rejects out-of-range times, end <= start, unknown ops, non-numeric params and regions outside the frame, raising MediaInputError with the offending JSON path, before any ffmpeg process starts",
+      "seam": "editlist.validate -> compile -> ffmpeg",
+      "behavior": "No ffmpeg process is spawned for an edit list that has not passed validation against probe facts",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o7",
+      "task_id": "t10",
+      "criterion_index": 1,
+      "criterion_snapshot": "media_cli/media/compile.py compiles a validated edit list to one ffmpeg argv: inputs/outputs as argv entries, filtergraph built only from an allowlisted filter table with typed params; movie, amovie, zmq, azmq and sendcmd can never be emitted",
+      "seam": "compile -> ffmpeg filtergraph",
+      "behavior": "The emitted filtergraph never contains movie, amovie, zmq, azmq or sendcmd, and no user-supplied string appears verbatim inside it",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o8",
+      "task_id": "t10",
+      "criterion_index": 4,
+      "criterion_snapshot": "op modules are dispatched via a fixed registry in compile.py that maps op names to media_cli/media/ops/{visual,redact,compose}.py; each module ships as a stub raising MediaInputError('input.op_not_implemented') until its own task fills it",
+      "seam": "ops registry build(op, ctx) -> list[FilterNode]",
+      "behavior": "t11/t12/t13 op modules keep the stub's build signature; the compiler dispatches every enum op through this registry and nothing else",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o9",
+      "task_id": "t12",
+      "criterion_index": 2,
+      "criterion_snapshot": "a redacted output is always re-encoded; subtitle, attachment and data streams and container metadata are dropped unless keep=[...] names them; the result lists kept and dropped streams",
+      "seam": "redacted output file",
+      "behavior": "A redacted output carries no subtitle, attachment or data stream and no container metadata unless explicitly kept, and is never stream-copied for the video it redacts",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o10",
+      "task_id": "t17",
+      "criterion_index": 2,
+      "criterion_snapshot": "the result carries coverage: {sample_fps, method:'hold'|'linear', frames_without_detection:[ranges], rejected_boxes:[...]}; the dry-run shows every region before any render",
+      "seam": "regions -> redaction dry-run/result",
+      "behavior": "Every model-derived redaction reports sample_fps, the interpolation method and frames_without_detection; it never implies full coverage it did not measure",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o11",
+      "task_id": "t15",
+      "criterion_index": 2,
+      "criterion_snapshot": "the cache key = file fingerprint (size + mtime + inode + head/tail sample hash) + sense identity (role, served model, prompt version, sampling params); a model or prompt change re-indexes, and an unchanged file makes zero gateway calls (stub server counts requests)",
+      "seam": "search index cache -> lobes gateway",
+      "behavior": "An unchanged file with an unchanged sense identity triggers zero gateway requests; a changed model or prompt version always re-indexes",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o12",
+      "task_id": "t15",
+      "criterion_index": 3,
+      "criterion_snapshot": "dry_run reports the exact planned sense-call count; above the cap (default 600, configurable) it raises MediaInputError('input.budget_exceeded') before any call; purge(path) deletes every cached artifact for that file; a total size cap evicts least-recently-used",
+      "seam": "index budget -> lobes gateway",
+      "behavior": "When the planned sense-call count exceeds the cap, input.budget_exceeded is raised before the first request",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o13",
+      "task_id": "t19",
+      "criterion_index": 1,
+      "criterion_snapshot": "media_cli/media/daemon/server.py serves line-delimited JSON requests (submit, status, result, cancel, ping) on a 0600 unix socket and rejects peers whose SO_PEERCRED uid differs from its own",
+      "seam": "daemon unix socket -> local peers",
+      "behavior": "The socket is mode 0600 inside a 0700 directory, and a connection from a different uid is refused before any request is read",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o14",
+      "task_id": "t19",
+      "criterion_index": 3,
+      "criterion_snapshot": "runs at most N (default 1) encodes at once; each ffmpeg starts in its own process group; cancel and SIGTERM kill the group (pgrep finds no orphan); it exits after an idle timeout (default 300s) with an empty queue",
+      "seam": "daemon -> ffmpeg child processes",
+      "behavior": "After cancel, SIGTERM or idle exit, no ffmpeg process spawned by the daemon remains alive",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o15",
+      "task_id": "t20",
+      "criterion_index": 3,
+      "criterion_snapshot": "only submit may spawn; status/result/cancel against no daemon read the job store directly or return a typed 'no daemon' result; a job survives the submitting process exiting and can be polled from a fresh process",
+      "seam": "CLI verbs -> daemon lifecycle",
+      "behavior": "Only submit may spawn the daemon; help, overview, explain, learn, doctor, probe, frames, status, result and cancel never create a daemon process or socket",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o16",
+      "task_id": "t22",
+      "criterion_index": 3,
+      "criterion_snapshot": "every noun uses add_subparsers(parser_class=type(p)) and exposes an 'overview' subverb; a test proves a dry run leaves the filesystem byte-identical and --apply never changes the source file's hash",
+      "seam": "write verbs dry-run/--apply boundary",
+      "behavior": "Without --apply, no file is created, modified or deleted and no job is submitted; with --apply the source file's hash is unchanged",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o17",
+      "task_id": "t23",
+      "criterion_index": 3,
+      "criterion_snapshot": "'uv run teken cli doctor . --strict' passes with zero failures, with the check count recorded in the PR body before and after; every clause of the spec's after-state maps to a verb shown by 'media learn'",
+      "seam": "installed 'media' CLI -> teken rubric gate",
+      "behavior": "'teken cli doctor . --strict' reports zero failures, and every help/error hint names the installed command 'media'",
+      "origin": "llm",
+      "status": "approved"
+    }
+  ]
+}
