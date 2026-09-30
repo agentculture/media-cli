@@ -239,6 +239,63 @@ def test_socket_0600_in_0700_dir_and_ping(run_daemon, sockdir):
     assert resp == {"ok": True, "pid": os.getpid()}
 
 
+def test_default_sockdir_prefers_xdg_runtime_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "rt"))
+    assert server.default_sockdir() == tmp_path / "rt" / "media-cli"
+
+
+def test_default_sockdir_falls_back_to_cache_dir(tmp_path, monkeypatch):
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    got = server.default_sockdir()
+    assert got == tmp_path / "cache" / "media-cli" / "run"
+    assert not got.exists()
+    server.ensure_sockdir(got)  # creates missing parents, leaf 0700
+    assert got.is_dir() and stat.S_IMODE(os.stat(got).st_mode) == 0o700
+    assert os.stat(got).st_uid == os.getuid()
+
+
+def test_default_sockdir_falls_back_to_home_cache(tmp_path, monkeypatch):
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    got = server.default_sockdir()
+    assert got == tmp_path / ".cache" / "media-cli" / "run"
+    server.ensure_sockdir(got)
+    assert stat.S_IMODE(os.stat(got).st_mode) == 0o700
+
+
+def test_kill_group_escalates_to_sigkill_when_sigterm_ignored():
+    # Exercises the escalation helper used by the ffmpeg handler with a child
+    # that ignores SIGTERM (ffmpeg itself always honours SIGTERM).
+    code = (
+        "import signal, subprocess, sys, time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "c = subprocess.Popen([sys.executable, '-c', "
+        "'import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)']); "
+        "print(c.pid, flush=True); time.sleep(60)"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-c", code], stdout=subprocess.PIPE, start_new_session=True
+    )
+    try:
+        grandchild = int(proc.stdout.readline())
+        pgid = proc.pid
+        assert sorted(group_members(pgid)) == sorted([proc.pid, grandchild])
+        t0 = time.monotonic()
+        server._kill_group(proc, pgid, 0.5)
+        elapsed = time.monotonic() - t0
+        assert proc.returncode == -signal.SIGKILL
+        assert 0.4 <= elapsed < WAIT
+        wait_for(lambda: not pid_alive(grandchild))
+        assert group_members(pgid) == []
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait(WAIT)
+        proc.stdout.close()
+
+
 def test_refuses_loose_sockdir(sockdir, store):
     sockdir.mkdir(mode=0o755)
     os.chmod(sockdir, 0o755)

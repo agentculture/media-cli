@@ -75,7 +75,6 @@ import stat
 import struct
 import subprocess  # constants/types only: ffmpeg is started via _tools.spawn (o2)
 import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -153,17 +152,21 @@ def register_handler(kind: str, fn: Handler) -> None:
 
 
 def default_sockdir() -> Path:
-    """``$XDG_RUNTIME_DIR/media-cli``, else ``<tmp>/media-cli-<uid>``."""
+    """``$XDG_RUNTIME_DIR/media-cli``; else ``$XDG_CACHE_HOME/media-cli/run``
+    (``~/.cache/media-cli/run`` when ``XDG_CACHE_HOME`` is unset)."""
     runtime = os.environ.get("XDG_RUNTIME_DIR")
     if runtime:
         return Path(runtime) / "media-cli"
-    return Path(tempfile.gettempdir()) / f"media-cli-{os.getuid()}"
+    cache = os.environ.get("XDG_CACHE_HOME")
+    base = Path(cache) if cache else Path.home() / ".cache"
+    return base / "media-cli" / "run"
 
 
 def ensure_sockdir(sockdir: Path) -> Path:
-    """Create ``sockdir`` 0700, or verify an existing one is private and ours."""
+    """Create ``sockdir`` 0700 (and any missing parents), or verify an existing
+    one is a private directory we own."""
     sockdir = Path(sockdir)
-    sockdir.parent.mkdir(parents=True, exist_ok=True)
+    sockdir.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         os.mkdir(sockdir, 0o700)
         os.chmod(sockdir, 0o700)  # a restrictive umask may have removed owner bits
