@@ -73,3 +73,6 @@ skips = ["B101", "B404", "B603"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "live_gateway: opt-in tests that need a live lobes gateway (run with MEDIA_CLI_LIVE_GATEWAY=1)",
+]
