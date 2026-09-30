@@ -30,13 +30,17 @@ class CliError(Exception):
     code: int
     message: str
     remediation: str = ""
+    kind: str = ""  # optional stable machine code, e.g. "input.unreadable"
 
     def __post_init__(self) -> None:
         super().__init__(self.message)
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        d: dict[str, object] = {
             "code": self.code,
             "message": self.message,
             "remediation": self.remediation,
         }
+        if self.kind:
+            d["kind"] = self.kind
+        return d
