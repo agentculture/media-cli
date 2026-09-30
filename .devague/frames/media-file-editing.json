@@ -1,0 +1,917 @@
+{
+  "slug": "media-file-editing",
+  "title": "media file editing",
+  "schema_version": 6,
+  "status": "exported",
+  "created": "2026-09-30T19:12:03Z",
+  "updated": "2026-09-30T19:28:42Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "media-cli lets an agent inspect and edit local video and audio files \u2014 probe info, peek at frames (optionally through lobes senses), search inside the media, cut at timestamps, blur regions, and more",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h1",
+          "text": "Every capability named in the announcement (probe, peek, search, cut, blur/redact) is reachable through an installed 'media' verb, not only a Python function",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [
+        {
+          "id": "q1",
+          "text": "Lane: CLAUDE.md:7-14, README.md:9-14 and issue #1 define media-cli as the DEVICE plane ('moves bytes to and from devices, does not interpret them'), and none of them mention files, editing or transcoding. Does file editing extend media-cli's lane (update the lane statement, issue #1 and the pyproject description together) or belong in a new sibling (e.g. a dedicated editing CLI) that media-cli only routes to? Q6 of issue #1 asks exactly this kind of question",
+          "resolved": true,
+          "blocking": false,
+          "resolution": "USER: expand the lane \u2014 media-cli edits the media we capture (device plane + the files it produces)"
+        },
+        {
+          "id": "q2",
+          "text": "What does 'search inside the media' mean for v1: (a) mechanical signal search media-cli can own with ffmpeg alone (scdet scene cuts, silencedetect, blackdetect/freezedetect, ebur128 loudness), (b) speech search over a timestamped transcript, or (c) visual query ('find when the red car appears') via senses? (b) and (c) need capabilities lobes does not expose today \u2014 stt returns text only, no timestamps (docs/openai-api.md:420-438)",
+          "resolved": true,
+          "blocking": false,
+          "resolution": "USER: search is semantic, not just mechanical \u2014 a model queries image, audio or video along the frames, e.g. 'which frames have a dog'"
+        },
+        {
+          "id": "q3",
+          "text": "What is in 'and more' for v1? Candidates the host already supports with no new install: probe/info, frames/contact-sheet, cut/trim (stream-copy vs re-encode), concat, blur/pixelize region, crop/scale, extract/replace/strip audio, transcode, loudness normalize. Which are v1, which later, which never?",
+          "resolved": true,
+          "blocking": false,
+          "resolution": "USER: open to more relevant features \u2014 black box (redaction) instead of blur, cropping, slow down / speed up, fade-in / fade-out, turning a video into a short with smooth transitions, etc."
+        }
+      ],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c2",
+      "kind": "assumption",
+      "text": "Editing shells out to the host ffmpeg/ffprobe (6.1.1-3ubuntu5+esm13, /usr/bin) via subprocess \u2014 no Python media binding; av/cv2/numpy/moviepy are absent from both the media-cli venv and system python3, so the zero-runtime-dependency posture (pyproject dependencies = []) survives",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c3",
+      "kind": "requirement",
+      "text": "Capability is detected, never assumed: every editing verb probes for ffmpeg/ffprobe and the specific filter/encoder it needs, and fails with a typed environment error (exit 2) plus an install hint when absent \u2014 ffmpeg was absent on 2026-07-24 (CLAUDE.md:261) and present by 2026-09-19, so presence has already flipped once on this host",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h2",
+          "text": "With ffmpeg removed from PATH, every editing verb exits 2 with a hint naming the missing binary \u2014 none crash, none silently no-op",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c4",
+      "kind": "assumption",
+      "text": "Encoding defaults to CPU libx264/aac; NVENC (h264/hevc/av1_nvenc compiled in, GB10 driver 580.126.09 libs present) is an opt-in accelerator only after a runtime probe, since a real NVENC encode on GB10 is unverified",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "Tests generate their own fixtures at test time with ffmpeg lavfi (testsrc + sine) and skip cleanly when ffmpeg is absent \u2014 the only media file in the workspace is /home/spark/git/test.wav (4.2s mono 44.1kHz), there is no video fixture",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h3",
+          "text": "No test depends on a checked-in media binary or a file outside the repo; all fixtures are produced by lavfi inside the test run",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c6",
+      "kind": "boundary",
+      "text": "Capture stays with webcam-cli: it already ships list/stream/record writing Matroska via GStreamer (webcam-cli/CLAUDE.md:35-37) \u2014 media-cli edits files that exist, it never opens a camera or mic to make one",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h4",
+          "text": "No media-cli code path opens /dev/video* or an ALSA capture device for the editing features",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c7",
+      "kind": "boundary",
+      "text": "Generation stays with innereye (text/image -> image & video, innereye#1) and harmonics-cli (non-TTS audio synthesis) \u2014 media-cli transforms existing media, it never synthesizes new content",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h5",
+          "text": "No editing verb produces content that is not derived from an input file (no synthesis, no generation)",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c8",
+      "kind": "boundary",
+      "text": "Interpretation is delegated, never owned: what a frame shows or a sound means goes to a sense/vision model (media-cli CLAUDE.md:10 'It moves bytes to and from devices. It does not interpret them'; face-recognition-cli owns face bboxes, image-only, no redaction verb) \u2014 media-cli accepts regions and timestamps as input or asks a sense for them, it runs no model itself",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h6",
+          "text": "media-cli imports no ML framework and loads no model weights; every model call is an HTTP request to the lobes gateway",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c9",
+      "kind": "non_goal",
+      "text": "Not a general ffmpeg passthrough: shell-cli already owns gated shell exec and can run ffmpeg (shell-cli lane per webcam-cli/CLAUDE.md:18); media-cli exposes typed, validated editing verbs with --json provenance, not an 'ffmpeg <args>' escape hatch",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c10",
+      "kind": "requirement",
+      "text": "Peeking through lobes is an optional stdlib-HTTP client to the lobes gateway (OpenAI-compatible /v1/chat/completions, model 'senses' or 'cortex', image_url parts), env-configured and fail-soft \u2014 media-cli never depends on lobes-cli as a package (no importable client exists; embodiment/pyproject.toml bans it; shabbos-goy decider/gemma.py is the precedent)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h7",
+          "text": "Uninstalling lobes-cli and stopping the gateway leaves every non-sense verb fully working; sense calls return a typed error",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c11",
+      "kind": "requirement",
+      "text": "Peek works with no lobes at all: frame extraction (timestamp -> PNG, contact sheet) is a local ffmpeg operation media-cli owns; a sense only adds an optional description of frames media-cli already extracted",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h8",
+          "text": "'media frames' (peek) produces images with no network access at all",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c12",
+      "kind": "requirement",
+      "text": "Blur takes explicit regions as input (rectangle(s) in pixels plus an optional time range) \u2014 media-cli does not detect what to blur; lobes has no detector/bbox endpoint and senses/cortex are VLMs whose coordinates are unvalidated",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h9",
+          "text": "Redaction applies only the regions it was given (explicitly or returned by the vision model and shown in the dry-run plan) \u2014 it never invents a region",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [
+        {
+          "id": "q5",
+          "text": "Semantic search (c19) finds WHEN a dog appears, but redacting it needs WHERE. lobes has no detector and no bbox endpoint (s6), and VLM-reported coordinates are unvalidated. Where do regions come from for 'black-box the dog': (a) ask senses/cortex for boxes and validate them, (b) add or borrow a real open-vocabulary detector (face-recognition-cli covers faces only), or (c) v1 redaction stays explicit-rectangle only?",
+          "resolved": true,
+          "blocking": false,
+          "resolution": "USER: v1 gets regions from a vision model (lobes senses / Gemma 4) \u2014 enough for now. Not dog-specific; a configurable detection capability (model or CLI) is a deferred future extension"
+        }
+      ],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c13",
+      "kind": "requirement",
+      "text": "Every file-writing verb (cut, blur, ...) follows the repo's dry-run convention: without --apply it prints the plan (resolved ffmpeg argv, output path, expected duration/streams) as --json; with --apply it writes a NEW output file and never overwrites the source (CLAUDE.md:366-371, README.md:77-80)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h10",
+          "text": "Running any write verb without --apply leaves the filesystem byte-identical, and with --apply the source file's hash is unchanged afterwards",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c14",
+      "kind": "requirement",
+      "text": "The editing surface registers as a new noun through the four-place path (a _commands module with register(), _build_parser, an explain catalog entry per path, _VERBS + learn map) with parser_class=type(p) and a noun-level overview, so it passes the teken rubric gate (26 checks) and test_every_catalog_path_resolves",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h11",
+          "text": "teken cli doctor . --strict passes and test_every_catalog_path_resolves covers every new path",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [
+        {
+          "id": "q4",
+          "text": "Long encodes vs the output contract: stdout is one JSON document at the end, emit_diagnostic writes progress to stderr (_output.py:92-95), but the rubric asserts stderr is empty on success (CLAUDE.md:181-183), and there is no timeout, cancellation or job model. Quiet by default with --progress opt-in, a job+poll model, or a hard timeout?",
+          "resolved": true,
+          "blocking": false,
+          "resolution": "USER: job and poll; a daemon would be great"
+        }
+      ],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c15",
+      "kind": "requirement",
+      "text": "ffmpeg/ffprobe run through an absolute path resolved by shutil.which, with an argv list and no shell \u2014 bandit's config skips B404/B603 but not B607 (pyproject.toml [tool.bandit])",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h12",
+          "text": "No subprocess call in media_cli uses shell=True or a bare executable name; bandit passes with the existing skip list",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c16",
+      "kind": "requirement",
+      "text": "Media failures get typed treatment inside the CliError contract (exit 1 bad input: unreadable/unsupported file, timestamp out of range, region outside frame; exit 2 environment: ffmpeg missing, filter or encoder unavailable), and the ffmpeg stderr tail goes into the remediation, never a raw traceback (cli/_errors.py:21-42, _dispatch __init__.py:98-119)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h13",
+          "text": "Feeding a corrupt file, an out-of-range timestamp, and an off-frame region each yields a distinct error code/message in --json with no traceback on stderr",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c17",
+      "kind": "requirement",
+      "text": "The docs that this work contradicts are corrected with it: CLAUDE.md:261 ('Absent: ffmpeg') and the Q1 claim that webcam-cli is 'a bare scaffold' are both stale as of 2026-09-30",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h14",
+          "text": "After this work, CLAUDE.md no longer claims ffmpeg is absent or that webcam-cli is a bare scaffold",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c18",
+      "kind": "decision",
+      "text": "Lane expands: media-cli owns the device plane AND editing of the media captured from it (user decision, resolves q1)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c19",
+      "kind": "requirement",
+      "text": "Search is semantic as well as mechanical: an agent asks a model about image, audio or video content along the frames ('which frames have a dog') and gets back timestamps/frame ranges (user decision, resolves q2)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h15",
+          "text": "Every search hit carries its timestamp range plus the evidence it came from (frame image path or transcript chunk, caption/text, model name)",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c20",
+      "kind": "requirement",
+      "text": "Editing ops include black-box redaction (not only blur), crop, speed up / slow down, fade-in / fade-out, and assembling a long video into a short with smooth transitions (user decision, resolves q3; open to more relevant ops)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h16",
+          "text": "Each listed op (black box, crop, speed, fade in/out, short-with-transitions) has at least one CI test asserting its effect via ffprobe or pixel stats",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c21",
+      "kind": "requirement",
+      "text": "Long-running edits and searches run as jobs that the agent submits and then polls, ideally served by a media-cli daemon (user decision, resolves q4)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h17",
+          "text": "A job survives the submitting CLI process exiting \u2014 the agent can poll it from a fresh shell",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [
+        {
+          "id": "q6",
+          "text": "Daemon shape: how does the CLI reach it (unix socket vs localhost HTTP), where do job state and outputs live (XDG state dir vs repo), how does it start (systemd --user unit vs 'media daemon start'), and what happens when it is not running \u2014 does submit fail with a hint or run the job in the foreground?",
+          "resolved": true,
+          "blocking": false,
+          "resolution": "USER: no explicit 'media daemon start' \u2014 a request starts the daemon on demand (or it runs as a background job), and the CLI talks to it over a unix socket"
+        },
+        {
+          "id": "q7",
+          "text": "Job output contract: the rubric asserts stdout is a single JSON document and stderr is empty on success (s10). Is it 'submit' returns {job_id} immediately and 'status/result <id>' return JSON snapshots, with no streaming? And are jobs cancellable and resumable after a daemon restart?",
+          "resolved": true,
+          "blocking": false,
+          "resolution": "USER: yes \u2014 submit returns a job id; status/result are polled"
+        }
+      ],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c22",
+      "kind": "requirement",
+      "text": "Edits are expressed as a declarative edit list (JSON timeline: segments, per-segment ops like speed/crop/redact, transitions between segments) that media-cli validates against ffprobe facts and compiles to one ffmpeg filtergraph. The dry-run prints the compiled plan; --apply submits it as a job. 'Make a short with smooth transitions' is then an edit list of N segments joined with xfade/acrossfade",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h18",
+          "text": "An edit list that references a time beyond the file's duration or an unknown op is rejected at dry-run, before any ffmpeg process starts",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c23",
+      "kind": "requirement",
+      "text": "Semantic search runs in two phases: (1) index \u2014 sample frames (fps/scene-change) and chunk audio, send each through lobes (senses/cortex for frames, stt for speech), and cache the results keyed by file content hash; (2) query \u2014 answer 'which frames have a dog' against the index, returning timestamps/ranges plus the evidence (frame, caption, model, confidence). Re-querying never re-runs the models",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h19",
+          "text": "A second query against an already-indexed, unchanged file makes zero calls to the gateway",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [
+        {
+          "id": "q8",
+          "text": "Is frame-level semantic search a caption-then-match over senses outputs, or an embedding index (lobes has an 'embedder' role, but lobes#284 says it's unreachable through the gateway, and it's unknown whether it embeds images)? Captioning is slow per frame; embeddings are fast to query but need a multimodal embedder",
+          "resolved": true,
+          "blocking": false,
+          "resolution": "USER: embeddings must be multimodal and we don't have one yet \u2014 v1 frame search is caption-then-match through senses; open an issue for a multimodal embedder"
+        }
+      ],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c24",
+      "kind": "requirement",
+      "text": "Speech search gets timestamps by chunking the audio into windows of <= 30s with overlap and offsetting each chunk's transcript \u2014 lobes /v1/audio/transcriptions returns text only, and whisper refuses clips > 30s (s6)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h20",
+          "text": "Transcript timestamps for a fixture with speech at a known offset > 30s land within +/- 1s of the true offset",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c25",
+      "kind": "boundary",
+      "text": "The daemon is a job runner for media-cli's own edits and indexing, not a second mesh agent \u2014 the resident mesh agent (culture.yaml backend: colleague, AGENTS.colleague.md) stays as-is; the daemon is invoked through the same 'media' CLI (e.g. submit / status / result / cancel)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h21",
+          "text": "culture.yaml and AGENTS.colleague.md are unchanged by the daemon work; the daemon registers nothing on the mesh",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c26",
+      "kind": "decision",
+      "text": "Redaction regions come from a vision model (lobes senses / Gemma 4) in v1; a configurable detector (pluggable model or sibling CLI) is deferred (user, resolves q5)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c27",
+      "kind": "requirement",
+      "text": "The daemon starts on demand: the first request that needs it spawns it in the background (no explicit 'media daemon start'), and the CLI reaches it over a unix socket (user, resolves q6)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h22",
+          "text": "With no daemon running, the first submit spawns it and succeeds; a stale socket file from a dead daemon is detected and replaced, not treated as live",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c28",
+      "kind": "requirement",
+      "text": "submit returns a job id immediately; the agent polls status/result by that id (user, resolves q7)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h23",
+          "text": "submit returns before the job's ffmpeg work completes (job id first, work after)",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c29",
+      "kind": "non_goal",
+      "text": "Configurable / pluggable object detectors (a dedicated detector model or CLI) are out of v1 \u2014 deferred future work (user, q5)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c30",
+      "kind": "decision",
+      "text": "v1 frame-level semantic search is caption-then-match through senses/cortex; an embedding index waits for a multimodal (image+text) embedder, tracked as an upstream issue (user, resolves q8)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c31",
+      "kind": "audience",
+      "text": "Mesh agents (and the operator driving them) that capture video/audio through webcam-cli / microphone-cli and need to inspect, search and cut that media without hand-writing ffmpeg",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h24",
+          "text": "The verbs are usable by an agent from 'media learn' + 'media explain' alone, without reading source",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c32",
+      "kind": "before_state",
+      "text": "Today an agent holding a captured .mkv/.wav can only shell out raw ffmpeg through shell-cli: no typed verbs, no dry-run, no JSON provenance, no way to ask 'where is the dog' \u2014 and media-cli itself ships no domain verb at all (4 commits, template verbs only)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h25",
+          "text": "The before-state claims are checkable: git log shows no domain verb, and gh search shows no editing lane elsewhere (s5, s8)",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c33",
+      "kind": "after_state",
+      "text": "An agent runs 'media' verbs to probe a file, extract/peek at frames, semantically search frames and speech for timestamps, and submit a JSON edit list (cut, crop, black-box redact, blur, speed, fades, xfade transitions into a short) as a daemon job it polls by id \u2014 every step dry-run first, every result JSON with provenance",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h26",
+          "text": "Each clause of the after-state maps to at least one verb in the exported plan",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c34",
+      "kind": "why_it_matters",
+      "text": "Capture is already solved by siblings, but what an agent can DO with the captured media is not owned by anyone (no agentculture repo depends on ffmpeg/av/moviepy; 'video editing' search = 0 issues); a typed, dry-run-first surface stops agents from improvising destructive ffmpeg one-liners",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h27",
+          "text": "No sibling repo's lane statement is contradicted by the new lane text in issue #1 / CLAUDE.md / README",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c35",
+      "kind": "success_signal",
+      "text": "On a lavfi-generated 10s fixture: 'media probe' returns duration within 0.1s and every stream as JSON; a cut from 2.0s-5.0s yields an output whose ffprobe duration is 3.0s +/- 0.1s; a black-box redact leaves the region's mean pixel value < 5 while outside the box is unchanged \u2014 all in CI with ffmpeg present, and skipped cleanly (not failed) without it",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h28",
+          "text": "The thresholds are enforced by assertions in the test suite, not just observed manually",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c36",
+      "kind": "success_signal",
+      "text": "A semantic query ('frames with a red square') against a fixture with a red square inserted at 4.0s-6.0s returns a range overlapping 4.0-6.0s via senses on a live gateway, and returns a typed exit-2 'sense unavailable' error (not a traceback, not an empty result) when no gateway is reachable",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h29",
+          "text": "The live-gateway check is a documented, opt-in test (marker) so CI without a gateway still passes",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c37",
+      "kind": "success_signal",
+      "text": "submit returns a job id in < 1s with no daemon running beforehand (on-demand spawn over the unix socket); status/result for that id return a single JSON document each; the teken rubric gate stays 100% (26+/26+) with the new nouns",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h30",
+          "text": "The rubric gate check count is recorded before and after, and the after count shows zero failures",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c38",
+      "kind": "decision",
+      "text": "v1 audio search is speech-only (chunked stt transcripts, c24); non-speech sound-event search ('when does the dog bark') waits for a lobes sound-event model, tracked as an upstream issue (user, resolves v3 with option a)",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    }
+  ],
+  "open_vagueness": [
+    {
+      "id": "v1",
+      "text": "lobes image/video wire contract is unwritten (lobes-cli#278) and no client sends image_url/video_url today \u2014 the peek-via-senses request shape (frame size limits, multi-image, video_url to cortex) must be confirmed against a live gateway before it is built",
+      "kind": "unknown_nonblocking",
+      "claim_id": null,
+      "resolved": false,
+      "resolution": "",
+      "resolution_claim_id": null
+    },
+    {
+      "id": "v2",
+      "text": "NVENC on GB10 is unverified \u2014 a single probe encode decides whether hardware encoding is offered at all",
+      "kind": "unknown_nonblocking",
+      "claim_id": null,
+      "resolved": false,
+      "resolution": "",
+      "resolution_claim_id": null
+    },
+    {
+      "id": "v3",
+      "text": "Non-speech audio semantics ('when does a dog bark') has no served model \u2014 lobes serves stt (speech) only, senses audio is not served (lobes#101). Speech search is covered by c24; sound-event search needs a model nobody serves yet",
+      "kind": "unknown_blocking",
+      "claim_id": null,
+      "resolved": true,
+      "resolution": "USER: option (a) \u2014 v1 audio search is speech-only; file a lobes issue for a sound-event model",
+      "resolution_claim_id": "c38"
+    },
+    {
+      "id": "v4",
+      "text": "Frame-embedding search waits on a multimodal image+text embedder in lobes \u2014 filed as agentculture/lobes-cli#289 (current embedder Qwen3-Embedding-0.6B is text-only, lobes/roles.py:50)",
+      "kind": "follow_up",
+      "claim_id": null,
+      "resolved": false,
+      "resolution": "",
+      "resolution_claim_id": null
+    },
+    {
+      "id": "v5",
+      "text": "Non-speech sound-event search waits on a lobes sound-event role \u2014 filed as agentculture/lobes-cli#290",
+      "kind": "follow_up",
+      "claim_id": null,
+      "resolved": false,
+      "resolution": "",
+      "resolution_claim_id": null
+    }
+  ],
+  "scope_entries": [
+    {
+      "id": "s1",
+      "surface": "host: /usr/bin/ffmpeg + ffprobe",
+      "finding": "ffmpeg/ffprobe 6.1.1-3ubuntu5+esm13 (arm64, --enable-gpl) are installed, dpkg info mtime 2026-09-19 \u2014 contradicts CLAUDE.md:261 'Absent: ffmpeg' (verified 2026-07-24). Every filter the idea needs is present: trim/atrim/concat, boxblur/gblur/avgblur/pixelize/delogo, crop/overlay/drawbox, select/scdet/thumbnail, silencedetect/ebur128, blackdetect/freezedetect. ffprobe -print_format json -show_streams works (verified on test.wav)",
+      "seeds": [
+        "c2",
+        "c3"
+      ]
+    },
+    {
+      "id": "s2",
+      "surface": "host: python bindings + other tools",
+      "finding": "av, cv2, numpy, moviepy, ffmpeg-python, whisper, faster_whisper, scenedetect, torch all absent from the media-cli venv; system python3 has only PIL. sox, v4l2-ctl, mediainfo, mkvmerge, exiftool still absent; gst-launch-1.0 present. The subprocess-to-ffmpeg path is the only zero-install route",
+      "seeds": [
+        "c2"
+      ]
+    },
+    {
+      "id": "s3",
+      "surface": "host: GPU (NVIDIA GB10, driver 580.126.09, aarch64)",
+      "finding": "h264/hevc/av1_nvenc and CUVID decoders compiled in and libnvidia-encode.so.1 present, but no NVENC encode was run on GB10; blur has no GPU path (no libnpp, no gblur_cuda) \u2014 only scale_cuda/overlay_cuda",
+      "seeds": [
+        "c4"
+      ]
+    },
+    {
+      "id": "s4",
+      "surface": "workspace fixtures",
+      "finding": "find -maxdepth 2 over /home/spark/git turns up only test.wav (pcm_s16le 44.1kHz mono 4.2s); no video file exists anywhere, so fixtures must be synthesized with lavfi",
+      "seeds": [
+        "c5"
+      ]
+    },
+    {
+      "id": "s5",
+      "surface": "sibling repos: webcam-cli, innereye, harmonics-cli, face-recognition-cli, shell-cli (+ mysight/seer/face/webglass/storybook/reduce/data-refinery)",
+      "finding": "No sibling owns or claims media FILE editing; gh search 'video editing' across agentculture = 0 hits, no AgentCulture pyproject depends on ffmpeg-python/av/moviepy/whisper. Adjacent only: webcam-cli records Matroska (CLAUDE.md:35-37, 'we produce an artifact ... and stop there' :22), innereye generates video (innereye#1), face-recognition-cli detects face bboxes on still images with no redaction verb, shell-cli can run ffmpeg as gated exec. Note media-cli CLAUDE.md Q1 calls webcam-cli 'a bare scaffold' \u2014 stale, it ships list/stream/record",
+      "seeds": [
+        "c6",
+        "c7",
+        "c8",
+        "c9"
+      ]
+    },
+    {
+      "id": "s6",
+      "surface": "lobes-cli (0.81.4, github agentculture/lobes-cli) + gateway docs",
+      "finding": "lobes is an inference-serving fleet, not a perception library: a 'lobe' is a gateway-routed model role (cortex=Qwen3.8-27B multimodal incl. video intake, senses=Gemma 4 12B vision, stt=parakeet-tdt-0.6b-v2 English/whisper Hebrew overlay, opt-in via --audio). The only CLI verb that runs a model, 'lobes run minor', is text-only (run.py:57-150). No bbox/detector, no OCR role, and the image/video wire contract is still unwritten (lobes#278). /v1/audio/transcriptions returns only {text} with no segments/timestamps (docs/openai-api.md:420-438), and whisper refuses clips > 30s (listen_server_whisper.py:56)",
+      "seeds": [
+        "c10",
+        "c11",
+        "c12"
+      ]
+    },
+    {
+      "id": "s7",
+      "surface": "media-cli lane docs: CLAUDE.md, README.md, pyproject description, issue #1",
+      "finding": "The lane is the device plane: CLAUDE.md:7-9 'owns the local media I/O device plane', :14 'It moves bytes to and from devices. It does not interpret them', README.md:9-14 'device selection, routing, playback and recording'. Files, editing and transcoding appear nowhere, in or out of scope. The only nod to conversion is issue #1's 'Play this WAV silently means resample-or-fail' (playback-side). issue #1 is the repo's only issue (open, no comments). Editing is a lane expansion that needs an operator decision",
+      "seeds": [
+        "q1"
+      ]
+    },
+    {
+      "id": "s8",
+      "surface": "media_cli/cli/ (_commands, explain/catalog.py, overview _VERBS, learn map)",
+      "finding": "4 commits, no domain verb has landed, and there is no subprocess/shutil use anywhere in media_cli/. The six template verbs live in _commands/{cli,doctor,explain,learn,overview,whoami}.py. A new noun touches the four places in CLAUDE.md:148-161 and follows the noun-group pattern with parser_class=type(p) (_commands/cli.py:30-43). learn purpose, parser description (__init__.py:74) and prog='media-cli' are still template prose/mismatched \u2014 that pre-existing debt will surface in every new catalog entry",
+      "seeds": [
+        "c14"
+      ]
+    },
+    {
+      "id": "s9",
+      "surface": "pyproject.toml deps + [tool.bandit]",
+      "finding": "dependencies = [], no optional-dependencies; dev group only. bandit skips B101/B404/B603 but not B607, so subprocess is pre-provisioned but bare-name executables would trip",
+      "seeds": [
+        "c2",
+        "c15"
+      ]
+    },
+    {
+      "id": "s10",
+      "surface": "cli/_errors.py + cli/_output.py + rubric gate",
+      "finding": "Exit codes 0/1/2 with 3+ reserved; CliError(code,message,remediation); _dispatch wraps all exceptions. Output is a single stdout document; emit_diagnostic goes to stderr, but the rubric asserts stderr is empty on success. There is no streaming, progress, timeout or partial-result precedent, so long ffmpeg runs have no home in the contract yet",
+      "seeds": [
+        "c16",
+        "q4"
+      ]
+    },
+    {
+      "id": "s11",
+      "surface": "tests/ + .github/workflows/tests.yml",
+      "finding": "22 tests (test_cli.py 12, test_cli_introspection.py 10), coverage fail_under=60. CI runs pytest+Sonar, lint (black/isort/flake8/bandit/markdownlint/teken cli doctor --strict) and version-check. tests.yml has no ffmpeg install step. Whether the ubuntu-latest runner image ships ffmpeg was NOT verified, so ffmpeg-backed tests need either an explicit install step or a skip-when-absent guard",
+      "seeds": [
+        "c5"
+      ]
+    },
+    {
+      "id": "s12",
+      "surface": "ffmpeg filter set vs 'search' and 'and more'",
+      "finding": "Mechanical search primitives exist locally with no model: scdet, silencedetect, blackdetect, freezedetect, ebur128, thumbnail (host survey). Semantic search needs a timestamped transcript or a VLM over sampled frames, and neither is served by lobes today (s6)",
+      "seeds": [
+        "q2",
+        "q3"
+      ]
+    },
+    {
+      "id": "s13",
+      "surface": "media-cli CLAUDE.md host facts (Q1, :261)",
+      "finding": "Two facts in CLAUDE.md have drifted: ffmpeg/ffprobe are now installed (dpkg 2026-09-19), and webcam-cli ships list/stream/record (webcam-cli/CLAUDE.md:35). webcam-cli/CLAUDE.md:121 carries the same stale ffmpeg claim \u2014 that is the sibling's file, so flag it, don't edit it",
+      "seeds": [
+        "c17"
+      ]
+    },
+    {
+      "id": "s14",
+      "surface": "host ffmpeg filters for the q3 ops (verified 2026-09-30)",
+      "finding": "ffmpeg -filters lists every filter the user's q3 ops need: drawbox (black box, fill with t=fill), crop/cropdetect, setpts + atempo (speed; rubberband and minterpolate for higher quality), fade/afade, xfade (+xfade_opencl) and acrossfade for smooth transitions, trim/atrim/concat/segment for assembling a short, thumbnail/tile/select/fps for frame sampling, showwavespic/showspectrumpic for audio visuals. No new install is needed",
+      "seeds": [
+        "c20"
+      ]
+    },
+    {
+      "id": "s15",
+      "surface": "lobes-cli issues (embed search, 2026-09-30)",
+      "finding": "No existing lobes issue asks for a multimodal embedder; the only embedder is Qwen3-Embedding-0.6B (text-only, roles.py:50), and it is unreachable through the spark gateway anyway (lobes#284). Filed lobes-cli#289 with acceptance criteria (shared image+text space at /v1/embeddings, dog/no-dog cosine smoke check)",
+      "seeds": [
+        "c30"
+      ]
+    }
+  ],
+  "lapses": [],
+  "obligations": []
+}
