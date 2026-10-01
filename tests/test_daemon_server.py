@@ -734,3 +734,26 @@ def test_identity_files_untouched():
         check=False,
     )
     assert out.stdout.strip() == ""
+
+
+def test_check_socket_path_limit_and_remediation(tmp_path):
+    server.check_socket_path("/tmp/" + "a" * (server._SUN_PATH_MAX - 5 - 1))  # exactly at limit
+    with pytest.raises(server.MediaEnvError) as ei:
+        server.check_socket_path("/tmp/" + "a" * server._SUN_PATH_MAX)
+    assert ei.value.kind == "env.socket_path_too_long"
+    assert "XDG_RUNTIME_DIR" in ei.value.remediation
+
+
+def test_daemon_run_rejects_long_socket_path_before_creating_anything(tmp_path, store):
+    sd = tmp_path / ("x" * 120)
+    with pytest.raises(server.MediaEnvError) as ei:
+        server.Daemon(sd, store=store, install_signals=False).run()
+    assert ei.value.kind == "env.socket_path_too_long"
+    assert not sd.exists()
+
+
+def test_wire_errors_carry_remediation(run_daemon):
+    d = run_daemon()
+    for payload in ({"op": "nope"}, {"op": "status"}, {"op": "submit", "job": 3}):
+        err = request(d.sock, payload)["error"]
+        assert err["remediation"], err["kind"]

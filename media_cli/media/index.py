@@ -10,6 +10,11 @@ max_cache_bytes=DEFAULT_MAX_CACHE_BYTES) -> dict``
     ``{t, frame_index, frame_path, caption, model, prompt_version}`` entries.  With
     ``dry_run`` nothing is captioned: it returns the exact planned sense-call count.  A plan
     above ``max_calls`` raises ``input.budget_exceeded`` before the first gateway request.
+    The plan counts one call per batch.  A batch whose reply has the wrong caption count is
+    retried once, then captioned frame by frame, so a build can spend MORE calls than the
+    plan; total calls never exceed ``max_calls`` (a retry/fallback that would pass it raises
+    ``input.budget_exceeded`` before it is sent) and a frame that stays malformed fails
+    closed with ``env.sense_unavailable``, caching nothing.
 ``load_index(path, *, fps|scene, batch_size, role, prompt_version, cache_dir)``
     Zero-gateway-call read of a cached index (or ``None``).
 ``purge(path, *, cache_dir=None) -> int``  /  ``fingerprint(path) -> dict``
@@ -202,7 +207,35 @@ def _budget(n_frames: int, batches: int, max_calls: int) -> None:
         )
 
 
-def _caption_batch(client: SensesClient, role: str, paths: list[str], pv: str) -> list[str]:
+class _Calls:
+    """Gateway caption calls spent so far, against ``max_calls`` (retries and per-frame
+    fallback count; the planned first-pass batches that have not run yet stay reserved)."""
+
+    def __init__(self, max_calls: int, pending: int) -> None:
+        self.max_calls = max_calls
+        self.used = 0
+        self.pending = pending  # first-pass batches not yet started
+
+    def start_batch(self) -> None:
+        self.pending -= 1
+
+    def spend(self, n: int, what: str) -> None:
+        if self.used + n + self.pending > self.max_calls:
+            raise MediaInputError(
+                INPUT_BUDGET_EXCEEDED,
+                f"{what} needs {n} more sense calls, which would pass the cap of "
+                f"{self.max_calls} ({self.used} used, {self.pending} first-pass batches "
+                "still to run)",
+                "raise max_calls, or sample fewer frames so retries fit in the budget",
+            )
+        self.used += n
+
+
+def _caption_once(
+    client: SensesClient, role: str, paths: list[str], pv: str, calls: _Calls
+) -> list[str] | None:
+    """One caption call; the captions, or None when the reply is malformed."""
+    calls.spend(1, "captioning")
     prompt = _PROMPTS.get(pv, _PROMPTS[PROMPT_VERSION]).format(n=len(paths))
     reply = client.describe_images(paths, prompt, role=role, response_format=_JSON_FORMAT)
     caps = reply.get("captions") if isinstance(reply, dict) else None
@@ -211,6 +244,31 @@ def _caption_batch(client: SensesClient, role: str, paths: list[str], pv: str) -
         or len(caps) != len(paths)
         or not all(isinstance(c, str) for c in caps)
     ):
+        return None
+    return caps
+
+
+def _caption_batch(
+    client: SensesClient, role: str, paths: list[str], pv: str, calls: _Calls
+) -> list[str]:
+    """Caption one batch: retry once on a malformed reply, then frame by frame.
+
+    Fails closed (``env.sense_unavailable``) if any single frame stays malformed.
+    """
+    calls.start_batch()
+    caps = _caption_once(client, role, paths, pv, calls)
+    if caps is None:
+        caps = _caption_once(client, role, paths, pv, calls)  # one retry of the batch
+    if caps is None and len(paths) > 1:
+        calls.spend(len(paths), f"captioning {len(paths)} frames one by one")
+        caps = []
+        for path in paths:
+            one = _caption_once(client, role, [path], pv, calls)
+            if one is None:
+                caps = None
+                break
+            caps.extend(one)
+    if caps is None:
         raise MediaEnvError(
             ENV_SENSE_UNAVAILABLE,
             f"senses model returned malformed captions (wanted {len(paths)} strings)",
@@ -315,9 +373,10 @@ def build_index(
             outdir_create=True,
         )
         entries: list[dict[str, Any]] = []
+        calls = _Calls(max_calls, batches)
         for i in range(0, len(shots), batch_size):
             chunk = shots[i : i + batch_size]
-            caps = _caption_batch(client, role, [s["path"] for s in chunk], prompt_version)
+            caps = _caption_batch(client, role, [s["path"] for s in chunk], prompt_version, calls)
             for shot, cap in zip(chunk, caps):
                 entries.append(
                     {

@@ -518,3 +518,78 @@ def test_module_entry_point_bad_flag_exits_nonzero(env):
     )
     assert p.returncode != 0
     _assert_nothing_created(env)
+
+
+# -- d13: socket path length and non-empty remediations --------------------------
+
+
+def test_long_runtime_dir_fails_fast_without_spawning(env, monkeypatch):
+    deep = env.base / ("d" * 60) / ("e" * 60)
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(deep))
+    with pytest.raises(MediaEnvError) as ei:
+        DaemonClient().submit(SHORT_JOB)
+    assert ei.value.kind == "env.socket_path_too_long"
+    assert "XDG_RUNTIME_DIR" in ei.value.remediation
+    assert "bytes" in ei.value.message
+    assert env.daemons() == []
+    assert not deep.exists()  # nothing was created either
+
+
+def test_long_runtime_dir_read_ops_fall_back_to_store(env, monkeypatch):
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(env.base / ("d" * 120)))
+    assert DaemonClient().ping() is False
+    assert env.daemons() == []
+
+
+def test_typed_errors_from_client_and_daemon_carry_remediation(env, monkeypatch):
+    errors = []
+    c = DaemonClient()
+    with pytest.raises(MediaInputError) as ei:
+        c.submit({"kind": "no-such-kind"})  # raised in the daemon, relayed over the wire
+    errors.append(ei.value)
+    with pytest.raises(MediaInputError) as ei:
+        c.submit({"kind": "ffmpeg", "args": "nope"})
+    errors.append(ei.value)
+    with pytest.raises(MediaInputError) as ei:
+        c.status("nope")
+    errors.append(ei.value)
+    store = JobStore()
+    running = store.create("ffmpeg", [])
+    store.update(running.id, state="running")
+    for _ in range(1):
+        monkeypatch.setattr(client_mod.DaemonClient, "_request", _always_unreachable)
+        with pytest.raises(MediaEnvError) as ee:
+            c.cancel(running.id)
+        errors.append(ee.value)
+    for exc in errors:
+        assert exc.remediation, exc.kind
+
+
+def _always_unreachable(self, payload, timeout=0):
+    raise client_mod._Unreachable("x")
+
+
+def test_raise_remote_never_yields_empty_remediation():
+    for err in (
+        {"kind": "env.daemon_internal", "message": "m"},
+        {"kind": "input.bad_request", "message": "m", "remediation": ""},
+        {"kind": "weird", "message": "m"},
+        "not a dict",
+    ):
+        with pytest.raises((MediaEnvError, MediaInputError)) as ei:
+            client_mod._raise_remote(err)
+        assert ei.value.remediation
+
+
+def test_unreachable_oserror_has_remediation(env, monkeypatch):
+    env.sockdir.mkdir(mode=0o700)
+    (env.sockdir / server.SOCKET_NAME).touch()
+
+    class Boom(socket.socket):
+        def connect(self, addr):
+            raise OSError("boom")
+
+    monkeypatch.setattr(client_mod.socket, "socket", Boom)
+    with pytest.raises(MediaEnvError) as ei:
+        DaemonClient().status("x")
+    assert ei.value.kind == "env.daemon_unavailable" and ei.value.remediation

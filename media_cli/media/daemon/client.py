@@ -79,6 +79,12 @@ ENV_DAEMON_UNAVAILABLE = "env.daemon_unavailable"
 ENV_DAEMON_PROTOCOL = "env.daemon_protocol"
 INPUT_JOB_ILLEGAL_TRANSITION = "input.job_illegal_transition"
 
+_DEFAULT_REMEDIATION = "check `media job list`; the daemon log is next to the jobs directory"
+_PROTOCOL_HINT = (
+    "the daemon and client disagree on the protocol; stop the old daemon (it exits when "
+    "idle) and retry"
+)
+
 _UNREACHABLE_ERRNOS = frozenset(
     {errno.ENOENT, errno.ECONNREFUSED, errno.ECONNRESET, errno.EPIPE, errno.ENOTCONN}
 )
@@ -89,6 +95,10 @@ _UNREACHABLE_ERRNOS = frozenset(
 _SPAWNED: list[subprocess.Popen] = []
 
 
+def _path_too_long(path: Path) -> bool:
+    return len(os.fsencode(str(path))) > server._SUN_PATH_MAX
+
+
 class _Unreachable(Exception):
     """No daemon answered on the socket (absent, stale, or exited mid-request)."""
 
@@ -96,11 +106,16 @@ class _Unreachable(Exception):
 def _raise_remote(error: Any) -> None:
     kind = error.get("kind", "") if isinstance(error, dict) else ""
     message = error.get("message", "daemon error") if isinstance(error, dict) else str(error)
+    remediation = error.get("remediation", "") if isinstance(error, dict) else ""
+    if not isinstance(remediation, str) or not remediation:
+        remediation = _DEFAULT_REMEDIATION
     if isinstance(kind, str) and kind.startswith("input."):
-        raise MediaInputError(kind, message)
+        raise MediaInputError(kind, message, remediation)
     if isinstance(kind, str) and kind.startswith("env."):
-        raise MediaEnvError(kind, message)
-    raise MediaEnvError(ENV_DAEMON_PROTOCOL, f"daemon error without a typed kind: {message}")
+        raise MediaEnvError(kind, message, remediation)
+    raise MediaEnvError(
+        ENV_DAEMON_PROTOCOL, f"daemon error without a typed kind: {message}", _PROTOCOL_HINT
+    )
 
 
 class DaemonClient:
@@ -145,6 +160,8 @@ class DaemonClient:
         """One request on a fresh connection. Raises :class:`_Unreachable`."""
         if not self._check_sockdir():
             raise _Unreachable(str(self.sockdir))
+        if _path_too_long(self.socket_path):
+            raise _Unreachable("socket path too long")  # no daemon can listen there
         data = json.dumps(payload, separators=(",", ":")).encode("utf-8") + b"\n"
         buf = b""
         try:
@@ -154,7 +171,9 @@ class DaemonClient:
                 s.sendall(data)
                 while not buf.endswith(b"\n"):
                     if len(buf) > server.MAX_REQUEST_BYTES * 64:
-                        raise MediaEnvError(ENV_DAEMON_PROTOCOL, "daemon response too large")
+                        raise MediaEnvError(
+                            ENV_DAEMON_PROTOCOL, "daemon response too large", _PROTOCOL_HINT
+                        )
                     chunk = s.recv(65536)
                     if not chunk:
                         break
@@ -169,16 +188,22 @@ class DaemonClient:
             if exc.errno in _UNREACHABLE_ERRNOS:
                 raise _Unreachable(str(exc)) from None
             raise MediaEnvError(
-                ENV_DAEMON_UNAVAILABLE, f"cannot reach the media daemon: {exc}", ""
+                ENV_DAEMON_UNAVAILABLE,
+                f"cannot reach the media daemon: {exc}",
+                f"check `media job list`; the daemon log is at {self.log_path}",
             ) from None
         if not buf:
             raise _Unreachable("connection closed without a response")
         try:
             resp = json.loads(buf)
         except ValueError as exc:
-            raise MediaEnvError(ENV_DAEMON_PROTOCOL, f"malformed daemon response: {exc}") from None
+            raise MediaEnvError(
+                ENV_DAEMON_PROTOCOL, f"malformed daemon response: {exc}", _PROTOCOL_HINT
+            ) from None
         if not isinstance(resp, dict):
-            raise MediaEnvError(ENV_DAEMON_PROTOCOL, "daemon response is not an object")
+            raise MediaEnvError(
+                ENV_DAEMON_PROTOCOL, "daemon response is not an object", _PROTOCOL_HINT
+            )
         if not resp.get("ok"):
             _raise_remote(resp.get("error"))
         return resp
@@ -271,6 +296,7 @@ class DaemonClient:
 
         The only method that may start a daemon.
         """
+        server.check_socket_path(self.socket_path)  # fail fast, before any spawn
         deadline = time.monotonic() + SPAWN_TIMEOUT
         payload = {"op": "submit", "job": job}
         for _ in range(SUBMIT_ATTEMPTS):
@@ -281,7 +307,9 @@ class DaemonClient:
                 continue
             job_id = resp.get("job_id")
             if not isinstance(job_id, str) or not job_id:
-                raise MediaEnvError(ENV_DAEMON_PROTOCOL, "daemon submit response has no job_id")
+                raise MediaEnvError(
+                    ENV_DAEMON_PROTOCOL, "daemon submit response has no job_id", _PROTOCOL_HINT
+                )
             return job_id
         raise MediaEnvError(
             ENV_DAEMON_UNAVAILABLE,
