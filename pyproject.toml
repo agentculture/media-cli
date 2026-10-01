@@ -1,6 +1,6 @@
 [project]
 name = "media-cli"
-version = "0.6.3"
+version = "0.7.0"
 description = "Agent and CLI for local media: owns the media I/O device plane (inventory, identity, routing; planned) and the editing of captured media — probe, frame peek, semantic frame/speech search, and declarative edit lists (cut, crop, redact, blur, speed, fades, transitions) run as daemon jobs. Composes with webcam-cli (capture), innereye/harmonics-cli (generation) and shell-cli (generic exec); delegates interpretation to the local lobes senses gateway."
 readme = "README.md"
 license = "Apache-2.0"
