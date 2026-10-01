@@ -110,13 +110,25 @@ def test_build_stores_entries_and_layout(gw, cache, media_mp4):
     assert (os.stat(cache).st_mode & 0o777) == 0o700
 
 
-def test_unchanged_file_zero_requests_of_any_path(gw, cache, media_mp4):
+def test_unchanged_rebuild_one_capabilities_zero_captions(gw, cache, media_mp4):
+    build(gw, media_mp4, cache)
+    before = len(gw.log)
+    again = build(gw, media_mp4, cache)
+    assert gw.log[before:] == [("GET", "/capabilities")]
+    assert len(again["entries"]) == 5
+
+
+def test_load_index_zero_requests_of_any_path(gw, cache, media_mp4):
     build(gw, media_mp4, cache)
     before = gw.requests
-    again = build(gw, media_mp4, cache)
-    assert gw.requests == before
-    assert len(again["entries"]) == 5
     assert index.load_index(media_mp4, cache_dir=cache, fps=0.5, batch_size=2) is not None
+    assert gw.requests == before
+
+
+def test_verify_false_makes_no_requests(gw, cache, media_mp4):
+    build(gw, media_mp4, cache)
+    before = gw.requests
+    build(gw, media_mp4, cache, verify=False)
     assert gw.requests == before
 
 
@@ -128,13 +140,13 @@ def test_prompt_version_change_reindexes(gw, cache, media_mp4):
     assert idx["entries"][0]["prompt_version"] == "2"
 
 
-def test_served_model_change_with_verify_reindexes(gw, cache, media_mp4):
+def test_served_model_change_reindexes_by_default(gw, cache, media_mp4):
     build(gw, media_mp4, cache)
     n = len(gw.posts)
-    build(gw, media_mp4, cache, verify=True)  # same model: only /capabilities
+    build(gw, media_mp4, cache)  # same model: only /capabilities
     assert len(gw.posts) == n
     gw.model = "model-b"
-    idx = build(gw, media_mp4, cache, verify=True)
+    idx = build(gw, media_mp4, cache)
     assert len(gw.posts) == n + 3
     assert idx["entries"][0]["model"] == "model-b"
     # still one cache dir: the re-index replaced the stale one
@@ -210,18 +222,26 @@ def test_lru_eviction_with_tiny_cap(gw, cache, media_mp4):
     assert len(left) == 1 and left[0] != first
 
 
-def test_lru_prefers_least_recently_used(gw, cache, media_mp4):
-    build(gw, media_mp4, cache, fps=0.5)
-    build(gw, media_mp4, cache, fps=0.2)
-    old, new = sorted(
-        os.listdir(cache), key=lambda d: os.stat(os.path.join(cache, d, "index.json")).st_mtime
-    )
-    # touch the older one via a read, making the other the LRU
-    index.load_index(media_mp4, cache_dir=cache, fps=0.5, batch_size=2)
-    os.utime(os.path.join(cache, old, "index.json"), (9e9 - 1, 9e9 - 1))
-    build(gw, media_mp4, cache, fps=0.1, max_cache_bytes=1)
-    assert old not in os.listdir(cache) or new not in os.listdir(cache)
-    assert len(os.listdir(cache)) == 1
+def test_lru_evicts_least_recently_used(gw, cache, media_mp4):
+    build(gw, media_mp4, cache, fps=0.5)  # A
+    build(gw, media_mp4, cache, fps=0.2)  # B, newer than A on disk
+    name = {}
+    for fps in (0.5, 0.2):
+        d = index._location(
+            cache,
+            index.fingerprint(media_mp4),
+            index._identity("senses", index.PROMPT_VERSION, index._sampling(fps, None, 2)),
+        )[1]
+        name[fps] = d
+        os.utime(os.path.join(d, "index.json"), (1000 + fps, 1000 + fps))
+    os.utime(os.path.join(name[0.2], "index.json"), (2000, 2000))
+    # reading A makes it more recently used than B, so B is now the LRU
+    assert index.load_index(media_mp4, cache_dir=cache, fps=0.5, batch_size=2) is not None
+    cap = sum(index._dir_size(d) for d in name.values())
+    build(gw, media_mp4, cache, fps=0.1, max_cache_bytes=cap)  # C overflows the cap
+    assert os.path.isdir(name[0.5])
+    assert not os.path.isdir(name[0.2])
+    assert len(os.listdir(cache)) == 2
 
 
 def test_fingerprint_changes_on_same_size_content_change(tmp_path):

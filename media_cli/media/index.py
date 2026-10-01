@@ -3,7 +3,7 @@
 Public API
 ----------
 ``build_index(path, *, fps=None, scene=None, dry_run=False, client=None, role="senses",
-batch_size=8, max_calls=600, verify=False, prompt_version=PROMPT_VERSION, cache_dir=None,
+batch_size=8, max_calls=600, verify=True, prompt_version=PROMPT_VERSION, cache_dir=None,
 max_cache_bytes=DEFAULT_MAX_CACHE_BYTES) -> dict``
     Sample frames (``fps`` -> one frame every ``1/fps`` s, or ``scene`` threshold) with
     ``media_cli.media.frames``, caption them in batches through the senses gateway and store
@@ -19,15 +19,18 @@ Cache layout (``$XDG_CACHE_HOME/media-cli/index``, fallback ``~/.cache/...``; di
     <fp16>-<params16>/index.json   schema_version, fingerprint, identity, entries[...]
     <fp16>-<params16>/frames/*.png
 
-Cache key and the o11 trade-off
--------------------------------
+Cache key and the o11 rule
+--------------------------
+o11: zero gateway calls on the QUERY path; build verifies the model with one capabilities call.
+
 The directory key is file fingerprint (size, mtime_ns, inode, sha256 of the first and last
 1 MiB -- never a full-file hash) plus ``(role, prompt_version, sampling params)``.  The
-*served model* is stored inside ``index.json`` rather than in the key, because learning it
-costs a ``GET /capabilities`` and an unchanged file must cost zero gateway requests.  So a
-model change is detected only when the identity is checked: ``build_index(verify=True)``
-compares the stored model to ``served_model()`` and re-indexes on a difference.  Without
-``verify`` (and for ``load_index``) the cached index is served from its stored identity.
+*served model* is stored inside ``index.json`` rather than in the key.  ``load_index`` (the
+query path) serves the cached index from its stored identity with zero gateway requests.
+``build_index`` defaults to ``verify=True``: one ``GET /capabilities`` per build, comparing
+the stored model with ``served_model()`` and re-indexing on a difference (zero caption
+requests when unchanged).  A fresh build checks the budget before any request.  Passing
+``verify=False`` skips even that one call and trusts the stored model.
 
 Writes are atomic (staging dir, then rename); a failure caches nothing.  Total size is
 bounded by LRU eviction on ``index.json`` mtime (touched on every read).
@@ -257,7 +260,7 @@ def build_index(
     role: str = "senses",
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_calls: int = DEFAULT_MAX_CALLS,
-    verify: bool = False,
+    verify: bool = True,
     prompt_version: str = PROMPT_VERSION,
     cache_dir: str | None = None,
     max_cache_bytes: int = DEFAULT_MAX_CACHE_BYTES,
