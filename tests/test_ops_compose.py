@@ -218,6 +218,7 @@ def test_vfr_source_segments_join(media_vfr_offset, tmp_path):
     assert abs(v_end - a_end) <= 2 * FRAME
 
 
+@pytest.mark.requires_ffmpeg
 def test_audioless_input_joins_video_only(tmp_path):
     _tools.require_filter("xfade")
     src = tmp_path / "silent.mp4"

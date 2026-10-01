@@ -99,11 +99,49 @@ def default_root() -> Path:
     return base / "media-cli" / "jobs"
 
 
+INPUT_JOB_STORE_INVALID = "input.job_store_invalid"
+
+
+def _allowed_bases() -> list[str]:
+    bases = [str(Path.home()), tempfile.gettempdir()]
+    state = os.environ.get("XDG_STATE_HOME")
+    if state:
+        bases.append(state)
+    return [os.path.realpath(b) for b in bases]
+
+
+def _safe_root(root: Path | str) -> Path:
+    """Resolve a caller-supplied store root and refuse anything unsafe.
+
+    A custom root (``--jobs-root``, a test's ``store=``) must resolve, after
+    symlinks, to a directory inside the user's home, ``$XDG_STATE_HOME`` or the
+    temp dir, and must not be an existing non-directory or another user's dir.
+    """
+    resolved = os.path.realpath(os.fspath(root))
+    inside = any(
+        resolved == base or resolved.startswith(base + os.sep) for base in _allowed_bases()
+    )
+    if not inside:
+        raise MediaInputError(
+            INPUT_JOB_STORE_INVALID,
+            f"job store root {resolved!r} is outside the home, state and temp directories",
+            "omit --jobs-root to use $XDG_STATE_HOME/media-cli/jobs",
+        )
+    path = Path(resolved)
+    if path.exists() and (not path.is_dir() or path.stat().st_uid != os.getuid()):
+        raise MediaInputError(
+            INPUT_JOB_STORE_INVALID,
+            f"job store root {resolved!r} is not a directory owned by this user",
+            "point --jobs-root at a private directory you own, or omit it",
+        )
+    return path
+
+
 class JobStore:
     """Thread-safe, atomic, restart-surviving job record store."""
 
     def __init__(self, root: Path | str | None = None) -> None:
-        self.root = Path(root) if root is not None else default_root()
+        self.root = _safe_root(root) if root is not None else default_root()
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._last_ns = 0
@@ -112,7 +150,7 @@ class JobStore:
     def _check_id(self, job_id: str) -> None:
         if not job_id or "/" in job_id or "\\" in job_id or job_id.startswith("."):
             raise MediaInputError(
-                INPUT_JOB_NOT_FOUND, f"no such job: {job_id!r}", "use `media jobs` to list ids"
+                INPUT_JOB_NOT_FOUND, f"no such job: {job_id!r}", "use `media job list` to list ids"
             )
 
     def _json_path(self, job_id: str) -> Path:
@@ -152,7 +190,9 @@ class JobStore:
             data = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             raise MediaInputError(
-                INPUT_JOB_NOT_FOUND, f"no such job: {path.stem!r}", "use `media jobs` to list ids"
+                INPUT_JOB_NOT_FOUND,
+                f"no such job: {path.stem!r}",
+                "use `media job list` to list ids",
             ) from None
         except (OSError, ValueError) as exc:
             raise MediaInputError(

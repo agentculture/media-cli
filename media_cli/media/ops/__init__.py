@@ -372,7 +372,7 @@ class FilterNode:
             if p.get("offset"):
                 expr = f"PTS-{format_number(p['offset'])}/TB"
             speed = p.get("speed", 1.0)
-            if speed != 1.0:
+            if not math.isclose(speed, 1.0):
                 expr = f"({expr})" if "-" in expr else expr
                 expr = f"{expr}/{format_number(speed)}"
             return f"{self.name}={expr}"

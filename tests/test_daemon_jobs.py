@@ -203,3 +203,29 @@ def test_mark_failed_on_terminal_job_rejected(store):
     store.update(rec.id, state="done")
     with pytest.raises(MediaInputError):
         store.mark_failed(rec.id, "x")
+
+
+def test_custom_root_outside_allowed_bases_is_refused(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    with pytest.raises(MediaInputError) as exc:
+        JobStore("/etc/media-cli-jobs")
+    assert exc.value.kind == "input.job_store_invalid"
+    assert exc.value.remediation
+
+
+def test_custom_root_that_is_a_file_is_refused(tmp_path) -> None:
+    f = tmp_path / "not-a-dir"
+    f.write_text("x")
+    with pytest.raises(MediaInputError) as exc:
+        JobStore(f)
+    assert exc.value.kind == "input.job_store_invalid"
+
+
+def test_custom_root_symlink_resolved_before_check(tmp_path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    store = JobStore(link)
+    assert store.root == real.resolve()

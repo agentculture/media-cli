@@ -979,6 +979,7 @@ def test_segment_context_is_frozen_with_shared_flags(media_mp4, tmp_path, monkey
     assert math.isclose(ctxs[1].start, 3.0)
 
 
+@pytest.mark.requires_ffmpeg
 def test_audio_only_cut_concat(tmp_path):
     src = tmp_path / "tone.m4a"
     _tools.run(

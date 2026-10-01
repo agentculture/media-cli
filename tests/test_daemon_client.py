@@ -381,6 +381,7 @@ def test_read_ops_with_stale_socket_do_not_spawn(env):
     assert env.daemons() == []
 
 
+@pytest.mark.requires_ffmpeg
 def test_ops_go_through_running_daemon(env):
     c = DaemonClient()
     first = c.submit(LONG_JOB)

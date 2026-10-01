@@ -20,6 +20,8 @@ from media_cli.media import probe as P
 from media_cli.media import regions
 from media_cli.media.errors import ENV_SENSE_NOT_LOCAL, MediaEnvError
 
+pytestmark = pytest.mark.requires_ffmpeg
+
 W, H, FPS, DUR, SIDE = 320, 240, 10, 3, 60
 
 

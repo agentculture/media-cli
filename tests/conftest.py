@@ -156,9 +156,17 @@ def pytest_configure(config) -> None:
     config.addinivalue_line(
         "markers", "live_gateway: needs a live gateway; skipped unless MEDIA_CLI_LIVE_GATEWAY=1"
     )
+    config.addinivalue_line(
+        "markers", "requires_ffmpeg: needs ffmpeg and ffprobe on PATH; skipped when absent"
+    )
 
 
 def pytest_collection_modifyitems(config, items) -> None:
+    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
+        no_ffmpeg = pytest.mark.skip(reason="ffmpeg/ffprobe not installed")
+        for item in items:
+            if "requires_ffmpeg" in item.keywords:
+                item.add_marker(no_ffmpeg)
     if os.environ.get("MEDIA_CLI_LIVE_GATEWAY") == "1":
         return
     skip = pytest.mark.skip(reason="set MEDIA_CLI_LIVE_GATEWAY=1 to run live gateway tests")

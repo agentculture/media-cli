@@ -133,6 +133,7 @@ def test_missing_file_unreadable(tmp_path):
     assert ei.value.remediation
 
 
+@pytest.mark.requires_ffmpeg
 def test_text_file_unreadable(tmp_path):
     f = tmp_path / "x.mp4"
     f.write_text("this is not media\n" * 50)
