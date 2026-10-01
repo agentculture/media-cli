@@ -61,7 +61,7 @@ _EXT_CONTAINER = {
     ".avi": "avi",
 }
 _CONTAINER_EXTS = {
-    "mp4": (".mp4", ".m4v"),
+    "mp4": (".mp4", ".m4v", ".m4a"),
     "mov": (".mov",),
     "matroska": (".mkv",),
     "webm": (".webm",),
