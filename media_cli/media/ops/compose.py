@@ -1,6 +1,7 @@
 """Op module: transitions: xfade (video) + acrossfade (audio) joins (task t13).
 
-``build(op, ctx)`` (``op`` is the edit-list Transition) is called once per join by the compiler.  The
+``build(op, ctx)`` (``op`` is the edit-list Transition) is called once per join by the
+compiler.  The
 edit-list ``type`` (``xfade`` | ``acrossfade``) only selects this module in
 ``compile.TRANSITION_REGISTRY``; it does not change the result -- a join always
 yields the video xfade *and* the audio acrossfade so the two streams stay the
