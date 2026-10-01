@@ -42,8 +42,8 @@ submit), optional ``argv`` (the originating command, list of str), ``output``
 for the handler. Kind ``"ffmpeg"`` requires ``args`` (ffmpeg arguments without
 the binary) and accepts ``tmp_output``, ``duration`` (seconds, for
 ``progress.fraction``) and ``overwrite`` (bool, default false). The daemon adds
-``-nostats -progress pipe:1`` (as leading global options), starts ffmpeg via :func:`media_cli.media._tools.spawn`
-in its own session/process group, streams stderr to the job log, parses progress
+``-nostats -progress pipe:1`` (as leading global options),
+starts ffmpeg via :func:`media_cli.media._tools.spawn` in its own session/process group, streams stderr to the job log, parses progress
 blocks into ``record.progress`` and records ``meta.pid``/``meta.pgid``. Success
 with ``tmp_output`` and ``output`` publishes the result: without ``overwrite``
 it hard-links ``tmp_output`` to ``output`` then unlinks the temp (never
