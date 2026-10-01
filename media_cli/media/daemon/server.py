@@ -40,13 +40,16 @@ Common keys: ``kind`` (a registered handler; unknown kinds are refused at
 submit), optional ``argv`` (the originating command, list of str), ``output``
 (str) and ``meta`` (object). Every other key is kept as ``record.meta["spec"]``
 for the handler. Kind ``"ffmpeg"`` requires ``args`` (ffmpeg arguments without
-the binary) and accepts ``tmp_output`` and ``duration`` (seconds, for
-``progress.fraction``). The daemon adds ``-nostats -progress pipe:1`` (as
-leading global options), starts ffmpeg via :func:`media_cli.media._tools.spawn`
+the binary) and accepts ``tmp_output``, ``duration`` (seconds, for
+``progress.fraction``) and ``overwrite`` (bool, default false). The daemon adds
+``-nostats -progress pipe:1`` (as leading global options), starts ffmpeg via :func:`media_cli.media._tools.spawn`
 in its own session/process group, streams stderr to the job log, parses progress
 blocks into ``record.progress`` and records ``meta.pid``/``meta.pgid``. Success
-with ``tmp_output`` and ``output`` does ``os.replace(tmp_output, output)``;
-failure or cancel removes ``tmp_output``.
+with ``tmp_output`` and ``output`` publishes the result: without ``overwrite``
+it hard-links ``tmp_output`` to ``output`` then unlinks the temp (never
+clobbering a path that appeared after planning; an existing ``output`` fails the
+job with kind ``input.output_exists`` and is left untouched); with
+``overwrite`` it does ``os.replace``. Failure or cancel removes ``tmp_output``.
 
 Other kinds plug in through :func:`register_handler`; a handler is
 ``fn(record, store, cancel_event) -> dict | None`` whose returned dict may set
@@ -105,6 +108,7 @@ ENV_DAEMON_SETUP = "env.daemon_setup"
 ENV_DAEMON_STOPPING = "env.daemon_stopping"
 ENV_DAEMON_INTERNAL = "env.daemon_internal"
 ENV_JOB_FAILED = "env.job_failed"
+INPUT_OUTPUT_EXISTS = "input.output_exists"  # same string as media.output
 
 Handler = Callable[[JobRecord, JobStore, threading.Event], "dict[str, Any] | None"]
 _RESULT_FIELDS = frozenset({"output", "progress", "meta"})
@@ -124,10 +128,11 @@ class DaemonSetupError(MediaEnvError):
 class JobFailed(Exception):
     """Raised by a handler: the job failed; ``stderr`` is kept on the record."""
 
-    def __init__(self, message: str, stderr: str = "") -> None:
+    def __init__(self, message: str, stderr: str = "", kind: str | None = None) -> None:
         super().__init__(message)
         self.message = message
         self.stderr = stderr
+        self.kind = kind  # typed error kind; None keeps the default for the job kind
 
 
 class JobCancelled(Exception):
@@ -282,6 +287,36 @@ def _kill_group(proc: subprocess.Popen, pgid: int, grace: float) -> None:
         proc.wait()
 
 
+def _publish(tmp: str, output: str, overwrite: bool) -> None:
+    """Move ``tmp`` to ``output`` with output.commit's no-clobber semantics.
+
+    Without ``overwrite`` an existing ``output`` is never touched (link() refuses
+    it atomically); ``tmp`` is always removed on failure.
+    """
+    try:
+        if overwrite:
+            os.replace(tmp, output)
+            return
+        try:
+            os.link(tmp, output)
+        except FileExistsError:
+            raise JobFailed(
+                f"output already exists: {output}",
+                "",
+                INPUT_OUTPUT_EXISTS,
+            ) from None
+        except OSError:
+            if os.path.lexists(output):  # e.g. dangling symlink or other race
+                raise JobFailed(
+                    f"output already exists: {output}", "", INPUT_OUTPUT_EXISTS
+                ) from None
+            os.rename(tmp, output)  # fs without hard links; tmp is gone after this
+        _remove(tmp)
+    except BaseException:
+        _remove(tmp)
+        raise
+
+
 def _make_ffmpeg_handler(kill_grace: float) -> Handler:
     def run_ffmpeg(rec: JobRecord, store: JobStore, cancel_event: threading.Event):
         spec = rec.meta.get("spec", {})
@@ -349,7 +384,7 @@ def _make_ffmpeg_handler(kill_grace: float) -> Handler:
             raise JobFailed(f"ffmpeg failed (exit {rc})", "".join(tail))
         result: dict[str, Any] = {}
         if tmp_output and rec.output:
-            os.replace(tmp_output, rec.output)
+            _publish(tmp_output, rec.output, bool(spec.get("overwrite", False)))
         if last is not None:
             result["progress"] = {**last, "fraction": 1.0}
         return result
@@ -708,6 +743,8 @@ class Daemon:
         except JobFailed as exc:
             if ev.is_set():
                 self._finish(rec.id, state="cancelled")
+            elif exc.kind is not None:
+                self._fail(rec.id, exc.message, exc.stderr, exc.kind)
             elif rec.kind == "ffmpeg":
                 self.store.mark_failed(rec.id, exc.stderr, exc.message)
             else:
@@ -724,9 +761,9 @@ class Daemon:
         except MediaInputError:
             pass
 
-    def _fail(self, job_id: str, message: str, stderr: str) -> None:
+    def _fail(self, job_id: str, message: str, stderr: str, kind: str = ENV_JOB_FAILED) -> None:
         error = {
-            "kind": ENV_JOB_FAILED,
+            "kind": kind,
             "message": message,
             "stderr_tail": stderr,
             "log_path": str(self.store.log_path(job_id)),
@@ -787,6 +824,8 @@ def _validate_job(job: Any) -> tuple[str, list[str], str | None, dict, dict]:
     if kind == "ffmpeg":
         _str_list(spec.get("args"), "args")
         _opt_str(spec.get("tmp_output"), "tmp_output")
+        if not isinstance(spec.get("overwrite", False), bool):
+            raise MediaInputError(INPUT_BAD_REQUEST, "'overwrite' must be a boolean")
         duration = spec.get("duration")
         if duration is not None and (
             isinstance(duration, bool) or not isinstance(duration, (int, float))
