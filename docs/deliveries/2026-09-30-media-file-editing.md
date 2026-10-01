@@ -225,9 +225,36 @@ Lapse ledger evidence:
 | `l1` | `assumption-for-measurement` | s16 concludes stream-copy cuts are inaccurate from container durations alone; the per-frame probe of the copy cut's first PTS/keyframe returned no rows and was not re-run, so the exact start snap was not measured |
 | `l2` | `assumption-for-measurement` | c49 claims full-file hashing is too slow for multi-GB captures without timing a hash of a large file on this host |
 
-pending approval (not yet evidence): `l3`, `l4`, `l5`, `l6`, `l7`, `l8`, `l9`, `l10`, `l11`, `l12`, `l13`
+pending approval (not yet evidence): `l3`, `l4`, `l5`, `l6`, `l7`, `l8`, `l9`, `l10`, `l11`, `l12`, `l13`, `l14`
+
+### Post-PR fixes (PR #4 CI, fixed at `b0298cc`)
+
+PR #4's first CI run found what the validation pass had missed:
+
+- **`c5`/`h3` were unmet before this fix.** `publish.yml`'s test job had no
+  ffmpeg, and 17 tests failed or errored instead of skipping. Validation never
+  ran the suite with ffmpeg absent (lapse `l14`).
+  - Fixed with a `requires_ffmpeg` marker that `conftest.py` skips when
+    ffmpeg/ffprobe are absent, and an ffmpeg install step in `publish.yml`.
+  - Re-checked locally with ffmpeg hidden: 507 passed, 322 skipped, 0 failed.
+    With ffmpeg: 827 passed.
+- **The SonarCloud gate failed** on new reliability and security ratings.
+  Coverage (91.3 %), duplication and maintainability were already OK.
+  - Bugs `python:S1244` (float `==` in `ops/visual.py` and `ops/__init__.py`)
+    now use `math.isclose`.
+  - Vulnerability `pythonsecurity:S8707`: `JobStore` took an unvalidated
+    `--jobs-root`. It now resolves the path with `realpath` and refuses roots
+    outside home, `$XDG_STATE_HOME` or the temp dir, and directories not owned
+    by the user (`input.job_store_invalid`). Three tests cover this.
+  - The 282 code smells (mostly test-style rules `S9073`/`S5778`) do not fail
+    the gate and are left as follow-up.
+- **`o17` leftover:** a `jobs.py` hint named a nonexistent `media jobs`
+  command. It now says `media job list`.
 
 ## Remaining Work / Follow-up
+
+- Re-check the SonarCloud gate on PR #4 after the `b0298cc` push, and triage
+  the 282 non-gating code smells.
 
 No plan task is partial, dropped or blocked. Remaining items:
 

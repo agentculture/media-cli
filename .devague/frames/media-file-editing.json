@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-30T19:12:03Z",
-  "updated": "2026-10-01T07:10:55Z",
+  "updated": "2026-10-01T07:23:21Z",
   "claims": [
     {
       "id": "c1",
@@ -1497,6 +1497,18 @@
       "skipped_check": "write and run the failing tests before implementing",
       "refs": [
         "d13"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l14",
+      "code": "control-absent",
+      "what": "Validation never ran the suite with ffmpeg absent, so c5/h3 ('skip cleanly when ffmpeg is absent') went unchecked; PR #4's publish.yml test job (no ffmpeg) showed tests that fail/error instead of skipping (test_media_regions, test_media_compile::test_audio_only_cut_concat, test_media_output::test_m4a_accepted_for_mp4_family_source, test_media_probe::test_text_file_unreadable, ...)",
+      "skipped_check": "run the full suite with ffmpeg removed from PATH before claiming c5/h3",
+      "refs": [
+        "c5",
+        "h3"
       ],
       "origin": "llm",
       "status": "proposed"
