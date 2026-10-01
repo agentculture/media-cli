@@ -1,7 +1,7 @@
 [project]
 name = "media-cli"
 version = "0.6.3"
-description = "Agent and CLI for the local media I/O device plane: enumerate and drive attached media devices — speakers and audio sinks, plus optional inputs such as standalone microphones — composing webcam-cli for camera and mic capture. Owns device selection, routing, playback and recording, not the interpretation of what is captured or played."
+description = "Agent and CLI for local media: owns the media I/O device plane (inventory, identity, routing; planned) and the editing of captured media — probe, frame peek, semantic frame/speech search, and declarative edit lists (cut, crop, redact, blur, speed, fades, transitions) run as daemon jobs. Composes with webcam-cli (capture), innereye/harmonics-cli (generation) and shell-cli (generic exec); delegates interpretation to the local lobes senses gateway."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"

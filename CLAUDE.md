@@ -4,69 +4,92 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-`media-cli` is an AgentCulture mesh agent that **owns the local media I/O device
-plane** — one inventory, one stable identity scheme, and one routing/arbitration
-surface across every attached media device: speakers and audio sinks, optional
-standalone inputs, and (by composition, not reimplementation) cameras and
-microphones. It answers *"what media hardware is on this machine, what can each
-piece actually do, which one should I use, and who is holding it right now?"*
+`media-cli` is an AgentCulture mesh agent with **two lanes**:
 
-It moves bytes to and from devices. It does not interpret them.
+1. **The local media I/O device plane** — one inventory, one stable identity
+   scheme, and one routing/arbitration surface across every attached media
+   device: speakers and audio sinks, optional standalone inputs, and (by
+   composition, not reimplementation) cameras and microphones. It answers *"what
+   media hardware is on this machine, what can each piece actually do, which one
+   should I use, and who is holding it right now?"* **(not built yet — see
+   below.)**
+2. **Editing of the media captured from it** — probe, peek at frames, search
+   frames and speech, and run declarative JSON edit lists (cut, crop, black-box
+   redact, blur, speed, fades, xfade transitions) as daemon jobs. **(built.)**
+   This lane was added by operator decision on 2026-09-30; the converged spec is
+   [`docs/specs/2026-09-30-media-file-editing.md`](docs/specs/2026-09-30-media-file-editing.md)
+   and the plan is
+   [`docs/plans/2026-09-30-media-file-editing.md`](docs/plans/2026-09-30-media-file-editing.md).
+
+It moves and transforms bytes. It does not interpret them: what a frame shows or
+what was said is asked of the local `lobes` senses gateway (local-only,
+fail-closed), never decided here.
 
 The build brief is [issue #1](https://github.com/agentculture/media-cli/issues/1)
-— read it before designing anything. It defines the lane, the host evidence it
-was derived from, and six open questions that are deliberately unanswered.
+— read it before designing anything on the device side. It defines the device
+lane, the host evidence it was derived from, and six open questions that are
+deliberately unanswered. The editing-lane expansion is recorded as a comment on
+that issue.
 
 The operator's decision is **compose, not absorb**:
 
 | Not ours | Owner |
 |----------|-------|
 | Camera + microphone *capture* (getting frames and samples off a device) | `webcam-cli` — route to it |
-| What a frame contains / what a sound means | a vision model; not this tool |
-| *What* to play (non-TTS sonic signatures) | `harmonics-cli` — see open question 2 |
+| What a frame contains / what a sound means | a vision model via the local lobes senses gateway; not this tool |
+| Generation: text/image to image and video | `innereye` |
+| *What* to play (non-TTS sonic signatures); non-TTS audio synthesis | `harmonics-cli` — see open question 2 |
 | Browser / page / screen capture | `webglass-cli` |
-| General file + shell execution surface | `shell-cli` |
+| General file + shell execution surface (raw `ffmpeg <args>`) | `shell-cli` |
 | The Reachy Mini robot that owns this host's only real speaker | `reachy-mini-cli` |
 
-The load-bearing idea: capture and playback are already spoken for, but nothing
-in the mesh owns the **device plane underneath them** — and that plane is where
-the hard, easily-got-wrong problems live. If this repo ends up a thin
-passthrough to `webcam` plus an `aplay` wrapper, the lane was misjudged; say so
-on issue #1 rather than build filler.
+Editing only transforms media files that already exist; it never opens a camera
+or capture device and never synthesizes content (honesty conditions in the
+spec). It is deliberately **not** an `ffmpeg` passthrough — typed, validated
+verbs with `--json` provenance, not an escape hatch.
 
-## Current state: scaffold, not the product
+The load-bearing idea of the device half: capture and playback are already
+spoken for, but nothing in the mesh owns the **device plane underneath them** —
+and that plane is where the hard, easily-got-wrong problems live. If the device
+half ends up a thin passthrough to `webcam` plus an `aplay` wrapper, the lane
+was misjudged; say so on issue #1 rather than build filler.
 
-Nothing in the domain is implemented. `media_cli/` contains **no device code at
-all** — what exists is the agent-first CLI skeleton scaffolded from
-`culture-agent-template`: six template verbs (`whoami`, `learn`, `explain`,
-`overview`, `doctor`, `cli overview`), the error/output contract, CI, and the
-vendored skill kit. Everything is green: 22 tests pass, the rubric gate passes
-26/26, markdownlint is clean.
+## Current state: the editing surface ships; the device half does not
 
-Three things about the scaffold to know before touching anything:
+The editing lane is implemented (`media_cli/media/`, five new verbs, the daemon)
+on top of the agent-first CLI skeleton scaffolded from `culture-agent-template`.
+Verbs beyond the six template ones (`whoami`, `learn`, `explain`, `overview`,
+`doctor`, `cli overview`):
 
-1. **The self-description strings are still template prose.** `learn`, the
-   `explain` catalog (`media_cli/explain/catalog.py`), `overview`'s artifact
-   list, and the parser description in `media_cli/cli/__init__.py:74` all
-   describe this repo as *"a clonable template for AgentCulture mesh agents"*.
-   That is false — it is now the media device-plane agent. These strings are the
-   agent-facing docs, so rewrite them **as the domain surface lands**, not after.
-2. **The console command is `media`, but the CLI calls itself `media-cli`.**
-   `[project.scripts]` installs `media`; argparse is built with
-   `prog="media-cli"` (`media_cli/cli/__init__.py:73`). So `--help`, every error
-   hint, `learn`, and the whole `explain` catalog tell an agent to type
-   `media-cli explain …` — **which is not an installed binary** (`uv run
-   media-cli` fails with "Failed to spawn"). The three-way split is deliberate
-   per the brief (command `media`, import package `media_cli`, dist `media-cli`;
-   the generic `media` module name is deliberately not squatted, and `colleague`
-   already carries an internal `media` module). The self-docs pointing at a
-   nonexistent command is not deliberate. `harmonics-cli` fixed exactly this in
-   its own issue #2 — follow that precedent. Fix `prog` and the doc strings
-   together, or the rubric's learnability guarantee is a lie to its only readers.
-3. **The catalog carries both `("media",)` and `("media-cli",)` keys**
+| Verb | What it does |
+|------|--------------|
+| `media probe <file>` | streams, duration, time origin (read-only) |
+| `media frames <file> --at\|--every\|--scene --out DIR` | extract PNG stills / contact sheet locally; `--describe` optionally adds sense captions |
+| `media edit plan\|apply\|regions` | validate + compile an edit list; `apply` is a dry run unless `--apply`, then returns a daemon `job_id`; `regions` asks the senses role for redaction boxes and reports coverage |
+| `media search index\|query\|purge\|cache` | semantic frame + speech search with evidence; `index` is dry-run unless `--apply` |
+| `media job status\|result\|cancel\|list` | poll daemon jobs by id |
+
+**Still not built: the device-plane inventory verbs** (`list`, `describe`,
+routing, playback, arbitration). `media_cli/` still contains **no device code**;
+`explain media` and `learn` say so. Everything under "Domain constraints" and
+"Open design questions" below describes that unbuilt half — host evidence and
+open questions, not shipped behaviour. Everything is green: 784 tests pass (2
+skipped: the opt-in live-gateway tests), the rubric gate passes, markdownlint is
+clean.
+
+Two earlier scaffold defects are resolved; one invariant remains:
+
+1. **The self-description strings are rewritten** for the editing surface
+   (`learn`, the `explain` catalog, `overview`, the parser description). Keep
+   them current as the device half lands — they are the agent-facing docs.
+2. **`prog` is now `media`** (approved deviation d11), so `--help`, every error
+   hint, `learn` and the `explain` catalog name the installed command. The
+   distribution and mesh nick stay `media-cli`; do not blanket-replace them. A
+   test guards against stale `media-cli <verb>` command strings.
+3. **The catalog still carries both `("media",)` and `("media-cli",)` keys**
    (`explain/catalog.py`). This is not redundancy — the rubric gate runs
    `explain <console-command>`, i.e. `explain media`, so the `("media",)` key is
-   what keeps `explain_self` green. Whatever you do to `prog`, keep both keys.
+   what keeps `explain_self` green. Keep both keys.
 
 ## Identity
 
@@ -96,11 +119,12 @@ switch.
 ```bash
 uv sync                                    # install (dev group included)
 
-uv run pytest -n auto                      # full suite, parallel (22 tests)
+uv run pytest -n auto                      # full suite, parallel (784 tests, 2 skipped)
 uv run pytest tests/test_cli.py::test_whoami_json -v   # a single test (drop -n)
 uv run pytest -n auto --cov=media_cli --cov-report=term   # coverage; fail_under = 60
 
 uv run media whoami                        # NOTE: `media`, not `media-cli`
+uv run media probe some.mkv --json        # editing surface (needs ffmpeg on PATH)
 uv run python -m media_cli learn --json    # equivalent module entry point
 ```
 
@@ -135,15 +159,66 @@ The CLI is **cited, not imported**, from teken's `python-cli` reference
 `teken` is dev-only. This repo owns its copy outright — edit it freely; do not
 try to upgrade it from upstream.
 
-**The zero-runtime-dependency posture is load-bearing and is the first thing the
-domain work will pressure.** Nothing on this host's device plane is reachable
-from the standard library: enumeration means either shelling out (`pactl`,
-`aplay`, `arecord`, `pw-dump`, reading `/dev/v4l/by-id/`) or taking a binding
-dependency. `harmonics-cli` faced the same fork and chose a middle path worth
-copying — a dependency-free core plus an opt-in `[audio]` extra
+**The zero-runtime-dependency posture is load-bearing and still holds**
+(`dependencies = []`). The editing lane shells out to the host `ffmpeg`/`ffprobe`
+(absolute path via `shutil.which`, argv list, never a shell) and talks to the
+lobes gateway with stdlib `urllib`; there are no Python media or ML dependencies
+(no `av`, `cv2`, `numpy`, `moviepy`), and no model weights are loaded here. The
+**device half will pressure it**: nothing on this host's device plane is
+reachable from the standard library, so enumeration means either shelling out
+(`pactl`, `aplay`, `arecord`, `pw-dump`, reading `/dev/v4l/by-id/`) or taking a
+binding dependency. `harmonics-cli` faced the same fork and chose a middle path
+worth copying — a dependency-free core plus an opt-in `[audio]` extra
 (`sounddevice`/`numpy`) that is lazily imported, never at module scope, and
 guarded by tests asserting `sounddevice` is absent from `sys.modules` on the
 offline paths. Decide deliberately and record why (open question 1).
+
+### The editing package: `media_cli/media/`
+
+Pure library code behind the `probe`/`frames`/`edit`/`search`/`job` verbs; the
+`_commands/` modules are thin wrappers.
+
+| Module | Owns |
+|--------|------|
+| `_tools.py` | the **only subprocess seam**: capability detection (ffmpeg/ffprobe, specific filters and encoders), argv execution, `env.*` errors with install hints |
+| `errors.py` | typed media errors; `kind` is a stable machine string (`input.*` exits 1, `env.*` exits 2) carried inside the `CliError` contract |
+| `probe.py` | ffprobe facts and the **time base** — normalized seconds from the first presented video frame (`to_source_seconds` / `from_source_seconds`; VFR handled by PTS) |
+| `frames.py` | local PNG extraction and contact sheets (no network) |
+| `editlist.py` | JSON edit-list schema + validation against probe facts, before any ffmpeg starts |
+| `compile.py`, `ops/{visual,redact,compose}.py` | compile the edit list to one ffmpeg filtergraph from an **allowlist** of filters with typed parameters; no edit-list string is interpolated into a filtergraph, and source/IO filters (`movie`, `amovie`, `zmq`, `sendcmd`) are never emitted |
+| `output.py` | atomic temp-file + rename writes; the **container rule** (output container = source container; untouched streams stream-copied); no-clobber unless `"overwrite": true`; the source is never written |
+| `senses.py` | stdlib client for the lobes senses gateway; **local-only** (`env.sense_not_local` if a role is proxied to a mesh peer), fail-soft (`env.sense_unavailable`) |
+| `speech.py`, `index.py`, `search.py` | speech chunking (<= 30s windows, offset transcripts), the content-hash-keyed index cache under `$XDG_CACHE_HOME/media-cli`, and query over it (zero gateway calls at query time) |
+| `regions.py` | senses-derived redaction regions with a sampling-coverage report |
+| `daemon/{jobs,server,client,handlers,__main__}.py` | the job runner (see below) |
+
+**Dry-run, `--apply`, daemon, polling.** Every write verb (`edit apply`,
+`search index`, `search purge`) is a dry run — it prints the compiled plan or
+the sense-call estimate and changes nothing — unless `--apply` is given.
+`--apply` on `edit apply` / `search index` **submits** a job to the daemon and
+returns a `job_id` immediately; the agent then polls `media job result <id>`
+until `"ready": true`. The daemon is a private job runner (unix socket under
+`$XDG_RUNTIME_DIR/media-cli/`, mode 0600, `SO_PEERCRED` uid check), **spawned on
+demand only by a submit** (race-free, exclusive lock; stale sockets replaced),
+capped at one concurrent encode, exits when idle, and kills the job's ffmpeg
+process group on cancel or shutdown. It is a job runner for media-cli's own
+work, **not** a second mesh agent: it registers nothing on the mesh, and
+`culture.yaml` / `AGENTS.colleague.md` are unaffected. Introspection, `probe`,
+`frames`, and `job *` never start it.
+
+**Safety properties to preserve:** sources are never modified; redaction fails
+closed (always re-encoded; unredactable streams and container metadata dropped
+unless kept; `edit regions` reports uncovered frames — an empty result is not
+proof of absence); sensing never leaves the machine.
+
+**Approved deviations.** The build departed from the confirmed plan in eleven
+recorded, human-approved places (d1–d11: time-base origin, atomic PNG writes,
+audio re-encode on mkv cuts, dropped non-media streams in filter mode,
+no-clobber on job completion, index verify-on-build, container-mismatch
+refusal, even-edge blur widening, early/late redaction windows, the
+`handlers.py` module, and the `prog=media` string fix). They live in devague
+state, not here: run `devague deviate --list`. Two (d5, d7) are marked
+`needs-follow-up` there.
 
 ### Adding a verb or noun
 
@@ -182,8 +257,9 @@ twice.
 stderr, **never mixed**. Every command takes `--json`. The rubric asserts stderr
 is empty on success.
 
-The domain work adds failure classes that deserve typed treatment inside this
-contract rather than a generic `code=2`: *present-but-forbidden* device nodes
+The editing surface already follows this with `kind` strings (`input.*`, `env.*`).
+The device half adds failure classes that deserve the same typed treatment rather
+than a generic `code=2`: *present-but-forbidden* device nodes
 (the ACL hazard below), *held-by-another-process* (`EBUSY`), and
 *format-not-negotiable* (a sink that cannot accept the requested rate). See open
 questions 3 and 4.
@@ -199,7 +275,8 @@ to one info check and exit 0. `doctor` and `overview` both build on
 
 ## Domain constraints
 
-These are design constraints, not trivia. Full derivation is in issue #1; the
+These are design constraints for the **not-yet-built device half**, not shipped
+behaviour and not trivia. Full derivation is in issue #1; the
 essentials below were **independently re-verified on the operator's host on
 2026-07-24**, and three of them extend or correct the brief.
 
@@ -256,10 +333,15 @@ differently and drift on different clocks.
   `Server Name: PulseAudio (on PipeWire 1.0.5)` with `Server Version: 15.0.0` —
   a PulseAudio version for a server that is not PulseAudio. **Do not
   version-sniff `pactl`.**
-- **Assume no media backend is installed.** Present: `pactl`, `aplay`,
-  `arecord`, `speaker-test`, `pw-cli`, `pw-dump`, `pw-play`, `paplay`, `wpctl`.
-  **Absent: `ffmpeg`, `sox`, `v4l2-ctl`, `fswebcam`** — the same lesson
-  webcam-cli hit. Detect capability and fail with a clear install hint; never
+- **Assume no media backend is installed — detect, never assume.** Present:
+  `pactl`, `aplay`, `arecord`, `speaker-test`, `pw-cli`, `pw-dump`, `pw-play`,
+  `paplay`, `wpctl`. **`ffmpeg` and `ffprobe` (6.1.1, `/usr/bin`) are present
+  now** — they were absent on 2026-07-24 and installed by 2026-09-19, so
+  presence has already flipped once on this host; every editing verb therefore
+  probes for the binary and the specific filter/encoder and fails with an `env.*`
+  error (exit 2) plus an install hint when missing. **Still absent (checked
+  2026-10-01): `sox`, `v4l2-ctl`, `mediainfo`** (and `fswebcam` as of the
+  2026-07-24 survey). Detect capability and fail with a clear install hint; never
   assume. (`paplay`/`pw-play` being present is a small addition to the brief's
   list — there is more than `aplay` to work with.)
 
@@ -300,14 +382,20 @@ them with the operator — do not quietly assume an answer while implementing.
 What was verified above sharpens three of them:
 
 - **Q1 — How do you depend on `webcam-cli`?** PyPI dependency + Python import,
-  or subprocess the `webcam` command? **Sequencing risk, and it is real:
-  `webcam-cli` is still a bare scaffold with no capture implementation at all**
-  (its own `CLAUDE.md` says so; its open issues are #1 the brief and #2 a docs
-  re-init). You cannot depend on an API that does not exist. Options: agree the
-  interface up front and build against it; start with the output/inventory half
-  that depends on nobody; or subprocess a CLI contract that is easier to keep
-  stable than a Python API. Cite-don't-import governs *skills*, not runtime deps
-  — sibling CLIs do take real PyPI dependencies. Pick deliberately, record why.
+  or subprocess the `webcam` command? **Superseded sequencing risk:** `webcam-cli`
+  is no longer a bare scaffold — its `CLAUDE.md` (checked 2026-10-01) says the
+  capture surface is built: `list`, `stream video|audio|av` and `record`, with
+  `devices.py` (stable by-id identity, camera-to-mic pairing), `access.py`
+  (`ok`/`absent`/`forbidden`/`busy`) and `engine.py` (GStreamer), every capture
+  path writing Matroska; a `describe` verb is not built. So an interface now
+  exists to build against, and much of the device-identity ground this repo's
+  device half was meant to cover is already there — re-read it before designing,
+  and weigh that under Q6. Options: subprocess a CLI contract that is easier to
+  keep stable than a Python API; take a PyPI dependency; or start with the
+  output/inventory half that depends on nobody. Cite-don't-import governs
+  *skills*, not runtime deps — sibling CLIs do take real PyPI dependencies.
+  Pick deliberately, record why. (The editing lane needed no such decision: it
+  edits files that exist and never touches `webcam`.)
 - **Q2 — Where is the `harmonics-cli` seam?** *This is no longer hypothetical.*
   `harmonics-cli` **0.8.0 has already shipped live playback with device
   selection**: `harmonics play --play --device <name-substring|index>`, an
@@ -429,13 +517,21 @@ real design and are cheap to ask now. Use the `communicate` skill.
 
 ```text
 media_cli/
-  cli/__init__.py         parser assembly, _dispatch, exception→exit-code translation
+  cli/__init__.py         parser assembly, _dispatch, exception→exit-code translation (prog="media")
   cli/_errors.py          CliError + exit-code policy (stable contract)
   cli/_output.py          stdout/stderr split (stable contract)
   cli/_commands/          one module per verb, each exposing register(sub)
+                          (template: whoami learn explain overview doctor cli;
+                           editing: probe frames edit search job)
   explain/catalog.py      markdown keyed by command-path tuple — every path needs an entry
-tests/                    smoke + introspection tests
+  media/                  editing library behind the verbs (see Architecture)
+    _tools.py errors.py probe.py frames.py editlist.py compile.py output.py
+    senses.py speech.py index.py search.py regions.py
+    ops/                  visual.py redact.py compose.py (allowlisted filtergraph)
+    daemon/               jobs.py server.py client.py handlers.py __main__.py
+tests/                    CLI contract + per-module tests; fixtures generated with ffmpeg lavfi
 .claude/skills/           vendored guildmaster skill kit (cite-don't-import; never edit)
+docs/specs/ docs/plans/   converged devague spec + plan for the editing lane
 docs/skill-sources.md     skill provenance ledger + re-sync procedure
 culture.yaml              mesh identity (suffix + backend)
 AGENTS.colleague.md       resident mesh prompt (backend: colleague)
@@ -443,7 +539,7 @@ AGENTS.colleague.md       resident mesh prompt (backend: colleague)
 
 This file describes the repository **as it exists on disk today**. Keep claims
 grounded in checked-in reality; if a section drifts ahead of reality, mark it
-`(planned)` or move it under a `## Roadmap` heading. The domain sections above
-are the one place that intentionally describes work not yet built — they are
+`(planned)` or move it under a `## Roadmap` heading. The device-plane
+domain sections above are the one place that intentionally describes work not yet built — they are
 marked as such, and they cite issue #1 and verifiable host state rather than
 asserting a design.
