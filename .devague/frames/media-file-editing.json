@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-30T19:12:03Z",
-  "updated": "2026-10-01T05:35:28Z",
+  "updated": "2026-10-01T07:10:55Z",
   "claims": [
     {
       "id": "c1",
@@ -1442,7 +1442,93 @@
       ],
       "origin": "llm",
       "status": "proposed"
+    },
+    {
+      "id": "l9",
+      "code": "control-absent",
+      "what": "t22: cancelling a RUNNING index job (cancel lands between caption batches) is implemented but untested; the index handler reaches the private index._location to report the index dir",
+      "skipped_check": "a test cancelling an in-flight index job against a slow stub gateway",
+      "refs": [
+        "t22",
+        "c45"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l10",
+      "code": "grader-unverified",
+      "what": "Main agent's d11 fix commit was made while 1 test failed: 'pytest | tail -1' masked pytest's exit status inside an && chain",
+      "skipped_check": "use pytest's own exit status (no pipe) to gate the commit",
+      "refs": [
+        "d11"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l11",
+      "code": "grader-unverified",
+      "what": "t24: a commit was made with invalid TOML in pyproject's description (regex left a trailing comma) because the && chain ended in '| tail', masking the failure; caught on the next run and amended",
+      "skipped_check": "gate the commit on the test command's own exit status",
+      "refs": [
+        "t24"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l12",
+      "code": "provenance-missing",
+      "what": "Main agent filed frame-level obligations o1-o3 (c35/c36/c37) whose bare ids collide with plan obligations o1-o3; evidence e1-e3 and the new c35-c37 evidence are ambiguous by ref (documented devague limitation in obligation_evidence.py). Mitigated by naming the claim id in every new evidence contract text",
+      "skipped_check": "check the obligation id namespace before filing frame-level obligations",
+      "refs": [
+        "c35",
+        "c36",
+        "c37"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l13",
+      "code": "control-absent",
+      "what": "d13 fix: implementation written before the tests; the red run was produced afterwards by stashing the source change (real red, wrong order)",
+      "skipped_check": "write and run the failing tests before implementing",
+      "refs": [
+        "d13"
+      ],
+      "origin": "llm",
+      "status": "proposed"
     }
   ],
-  "obligations": []
+  "obligations": [
+    {
+      "id": "o1",
+      "claim_id": "c35",
+      "seam": "installed 'media' CLI on lavfi fixtures (e2e)",
+      "behavior": "probe duration within 0.1s; a 2-5s cut is 3.0s +/- 0.1; a black box leaves the region mean < 5",
+      "source_text": "On a lavfi-generated 10s fixture: 'media probe' returns duration within 0.1s and every stream as JSON; a cut from 2.0s-5.0s yields an output whose ffprobe duration is 3.0s +/- 0.1s; a black-box redact leaves the region's mean pixel value < 5 while outside the box is unchanged \u2014 all in CI with ffmpeg present, and skipped cleanly (not failed) without it",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o2",
+      "claim_id": "c36",
+      "seam": "search index/query -> live local senses gateway",
+      "behavior": "a query for 'a red square' against the red-square fixture returns a range overlapping 4.0-6.0s; with no gateway reachable it fails with env.sense_unavailable, not a traceback",
+      "source_text": "A semantic query ('frames with a red square') against a fixture with a red square inserted at 4.0s-6.0s returns a range overlapping 4.0-6.0s via senses on a live gateway, and returns a typed exit-2 'sense unavailable' error (not a traceback, not an empty result) when no gateway is reachable",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o3",
+      "claim_id": "c37",
+      "seam": "edit apply --apply with no daemon running -> on-demand daemon",
+      "behavior": "submit returns a job id in < 1s; status/result are single JSON documents; rubric stays at zero failures",
+      "source_text": "submit returns a job id in < 1s with no daemon running beforehand (on-demand spawn over the unix socket); status/result for that id return a single JSON document each; the teken rubric gate stays 100% (26+/26+) with the new nouns",
+      "origin": "llm",
+      "status": "proposed"
+    }
+  ]
 }

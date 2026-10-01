@@ -2,7 +2,7 @@
   "plan_slug": "media-file-editing",
   "schema_version": 2,
   "created": "2026-09-30T19:58:53Z",
-  "updated": "2026-10-01T05:41:35Z",
+  "updated": "2026-10-01T07:15:26Z",
   "deviations": [
     {
       "id": "d1",
@@ -139,9 +139,761 @@
       "status": "approved",
       "classification": "acceptable",
       "seq": 9
+    },
+    {
+      "id": "d10",
+      "what": "t22 additionally owns new media_cli/media/daemon/handlers.py (registers an 'index' job kind running index.build_index) plus a one-line import of it in daemon/__main__.py (t20's file)",
+      "task_ref": "t22",
+      "reason": "c21 requires long searches to run as daemon jobs, but the daemon process only knows the built-in 'ffmpeg' kind, so 'search index --apply' would be rejected; handlers must be registered inside the daemon process. User approved 2026-10-01.",
+      "affects": [
+        "c21",
+        "t20"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 10
+    },
+    {
+      "id": "d11",
+      "what": "Fix task edits five user-facing strings outside t23's ownership (explain/__init__.py unknown-path hint; 'see media-cli ... overview' help in _commands/cli.py, edit.py, search.py, job.py) to name the installed command 'media', and turns t23's strict-xfail guard into a normal test",
+      "task_ref": "t23",
+      "reason": "Obligation o17 requires every help/error hint to name the installed 'media' command; t23 could not edit files it did not own and pinned the gap with a strict xfail. User approved 2026-10-01.",
+      "affects": [
+        "c14",
+        "h24",
+        "t21",
+        "t22"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 11
+    },
+    {
+      "id": "d12",
+      "what": "Fix: probe's JSON exposes the editable range (normalized start 0 and end = probe.end); an edit-list end at or beyond that end (within one frame) is clamped and treated as whole-file, so frame-only edits on the full span stay passthrough with stream-copied audio",
+      "task_ref": "t5",
+      "reason": "Found by t25: on an mkv probe reported 10.008s (audio tail) but edit plan accepted ends only up to 10.001s (video end), probe never exposed that bound, and end=10.0 fell to filter mode and re-encoded audio, so agents could not express 'whole file'. User approved fixing now 2026-10-01.",
+      "affects": [
+        "c50",
+        "t8",
+        "t10",
+        "t25"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "needs-follow-up",
+      "seq": 12
+    },
+    {
+      "id": "d13",
+      "what": "Validation fixes: (1) index captioning retries a batch once on a caption-count mismatch, then captions that batch frame by frame; it still fails closed (env.sense_unavailable, nothing cached) if any single frame stays malformed. (2) The daemon socket path is checked against the AF_UNIX length limit up front, with a typed env error whose remediation says to set a shorter XDG_RUNTIME_DIR; no daemon error may carry an empty remediation",
+      "task_ref": "t15",
+      "reason": "Validation at 8dc0e07: the c36 live test failed because Gemma-4 returned 3 captions for a 4-frame batch of near-identical frames, aborting the whole index; and an over-long socket path produced env.daemon_unavailable with an empty remediation. User approved fixing both before the PR 2026-10-01.",
+      "affects": [
+        "c36",
+        "c16",
+        "t20",
+        "t15"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "needs-follow-up",
+      "seq": 35
     }
   ],
-  "evidence": [],
-  "deltas": [],
-  "supersessions": []
+  "evidence": [
+    {
+      "id": "e1",
+      "obligation_ref": "o1",
+      "test_ref": "tests/test_media_errors.py::test_kind_strings_are_stable; ::test_json_error_output_includes_kind; tests/test_e2e_media.py::test_distinct_machine_codes_for_corrupt_range_and_offframe",
+      "behavior_text": "kind strings are fixed constants; --json errors carry kind; corrupt/out-of-range/off-frame give distinct input.* kinds, exit 1, one JSON object on stderr, no Traceback",
+      "contract_text": "Machine error codes are stable strings; every media failure is exit 1/2 with one of them; no traceback",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 13
+    },
+    {
+      "id": "e2",
+      "obligation_ref": "o2",
+      "test_ref": "tests/test_media_tools.py::test_run_uses_absolute_list_argv_no_shell; ::test_no_shell_true_and_stdlib_only; ::test_resolves_absolute_paths_and_caches",
+      "behavior_text": "run() builds an absolute-path list argv with shell unset; source has no shell=True; binaries resolve to absolute paths",
+      "contract_text": "Every ffmpeg/ffprobe invocation is an absolute-path argv list with shell=False",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 14
+    },
+    {
+      "id": "e3",
+      "obligation_ref": "o3",
+      "test_ref": "tests/test_media_probe.py::test_round_trip_vfr; tests/test_media_frames.py::test_roundtrip_on_vfr_offset; ::test_vfr_offset_pixels_match_the_indexed_frame",
+      "behavior_text": "on the VFR + offset fixture normalized t <-> frame_index round-trips and the extracted frame is byte-identical to the indexed source frame",
+      "contract_text": "A timestamp returned by search, fed unchanged into an edit list, selects the same frame",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 15
+    },
+    {
+      "id": "e4",
+      "obligation_ref": "o4",
+      "test_ref": "tests/test_media_senses.py::test_not_local_fails_closed_and_sends_no_media; ::test_locality_verdict_cached",
+      "behavior_text": "proxied/suffixed/garbage capabilities raise env.sense_not_local and the stub's request log shows zero media-bearing POSTs",
+      "contract_text": "No frame/audio/caption is sent unless /capabilities shows the role served locally",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 16
+    },
+    {
+      "id": "e5",
+      "obligation_ref": "o5",
+      "test_ref": "tests/test_media_output.py::test_kill_mid_write_leaves_no_dst_and_no_tmp; ::test_dst_appearing_before_commit_is_not_clobbered; tests/test_daemon_server.py (d5 no-clobber tests)",
+      "behavior_text": "a kill mid-write leaves no dst and no tmp; a dst created before commit is left untouched; read-only source hash/mtime/mode unchanged",
+      "contract_text": "Source never opened for writing; dst complete or absent; existing dst untouched unless overwrite",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 17
+    },
+    {
+      "id": "e6",
+      "obligation_ref": "o6",
+      "test_ref": "tests/test_media_editlist.py::test_validate_is_pure_no_subprocess",
+      "behavior_text": "validate() runs with subprocess.Popen/run and _tools.run/spawn patched to raise",
+      "contract_text": "No ffmpeg process is spawned for an edit list that has not passed validation",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 18
+    },
+    {
+      "id": "e7",
+      "obligation_ref": "o7",
+      "test_ref": "tests/test_media_compile.py::test_fuzz_injection_into_every_string_field; ::test_ops_returning_forbidden_nodes_are_refused",
+      "behavior_text": "injected , ; [ = ' movie= in every string field is rejected or never appears in the graph; forbidden filters are refused",
+      "contract_text": "Filtergraph never contains movie/amovie/zmq/azmq/sendcmd and no user string verbatim",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 19
+    },
+    {
+      "id": "e8",
+      "obligation_ref": "o8",
+      "test_ref": "tests/test_media_compile.py::test_registry_is_fixed_and_complete; ::test_op_modules_keep_the_build_signature; ::test_every_op_goes_through_the_registry",
+      "behavior_text": "registry maps every enum op to visual/redact/compose; build(op, ctx) signature preserved after t11-t13 merged; dispatch only via registry",
+      "contract_text": "Op modules keep build(op, ctx); compiler dispatches every op through the registry only",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 20
+    },
+    {
+      "id": "e9",
+      "obligation_ref": "o9",
+      "test_ref": "tests/test_ops_redact.py::test_redacted_extras_come_out_without_subtitle_cover_or_title; ::test_redacted_extras_kept_when_named",
+      "behavior_text": "redacted extras output has no subtitle/attached_pic/title and video re-encoded; keep retains only named kinds",
+      "contract_text": "Redacted output carries no subtitle/attachment/data/metadata unless kept; never stream-copied video",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 21
+    },
+    {
+      "id": "e10",
+      "obligation_ref": "o10",
+      "test_ref": "tests/test_media_regions.py::test_garbage_sample_is_reported_uncovered; ::test_empty_detection_is_not_coverage",
+      "behavior_text": "a garbage/empty sample yields a frames_without_detection range and no held region; coverage always carries sample_fps and method",
+      "contract_text": "Model-derived redaction reports sample_fps, method, frames_without_detection; never implies unmeasured coverage",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 22
+    },
+    {
+      "id": "e11",
+      "obligation_ref": "o11",
+      "test_ref": "tests/test_media_index.py::test_load_index_zero_requests_of_any_path; ::test_unchanged_rebuild_one_capabilities_zero_captions; ::test_served_model_change_reindexes_by_default; ::test_prompt_version_change_reindexes",
+      "behavior_text": "query path (load_index) makes zero requests; unchanged rebuild = one /capabilities, zero captions; model or prompt change re-indexes (per approved d6)",
+      "contract_text": "Unchanged file+identity -> zero gateway requests (query path); changed model/prompt always re-indexes",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 23
+    },
+    {
+      "id": "e12",
+      "obligation_ref": "o12",
+      "test_ref": "tests/test_media_index.py::test_budget_exceeded_before_any_request",
+      "behavior_text": "over-cap plan raises input.budget_exceeded with zero stub requests",
+      "contract_text": "Over-cap sense-call plans raise input.budget_exceeded before the first request",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 24
+    },
+    {
+      "id": "e13",
+      "obligation_ref": "o13",
+      "test_ref": "tests/test_daemon_server.py::test_socket_0600_in_0700_dir_and_ping; ::test_peer_with_other_uid_refused_before_read; ::test_refuses_loose_sockdir; ::test_refuses_symlinked_sockdir",
+      "behavior_text": "socket 0600 in 0700 dir; a peer with a mismatched uid (injected expected_uid) gets no bytes and no request is handled",
+      "contract_text": "Socket 0600 in 0700 dir; other-uid connection refused before any request is read",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 25
+    },
+    {
+      "id": "e14",
+      "obligation_ref": "o14",
+      "test_ref": "tests/test_daemon_server.py::test_cancel_running_ffmpeg_kills_group; ::test_sigterm_kills_running_groups_and_cleans_up; ::test_kill_group_escalates_to_sigkill_when_sigterm_ignored; ::test_idle_exit_subprocess",
+      "behavior_text": "cancel/SIGTERM kill the ffmpeg process group (pid gone, no /proc member of the pgid); SIGKILL escalation at helper level; idle exit",
+      "contract_text": "After cancel, SIGTERM or idle exit no daemon-spawned ffmpeg remains",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 26
+    },
+    {
+      "id": "e15",
+      "obligation_ref": "o15",
+      "test_ref": "tests/test_daemon_client.py::test_read_ops_with_no_daemon_use_store_and_never_spawn; tests/test_cli_introspection.py::test_read_only_verbs_never_spawn_the_daemon; ::test_probe_and_frames_never_spawn_the_daemon; tests/test_e2e_media.py::test_no_daemon_or_socket_after_read_only_verbs",
+      "behavior_text": "help/overview/explain/learn/doctor/probe/frames/status/result/cancel/list create no daemon, socket dir or log",
+      "contract_text": "Only submit may spawn the daemon",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 27
+    },
+    {
+      "id": "e16",
+      "obligation_ref": "o16",
+      "test_ref": "tests/test_cli_media_write.py::test_edit_plan_prints_plan_and_writes_nothing; ::test_edit_apply_without_apply_behaves_like_plan; ::test_search_index_dry_run_estimate_writes_nothing; ::test_search_purge_dry_run_lists_and_removes_nothing; ::test_edit_apply_runs_a_job_and_keeps_source",
+      "behavior_text": "every dry run leaves the tmp tree byte-identical with no socket/daemon; --apply leaves the source hash unchanged",
+      "contract_text": "Without --apply nothing is created/modified/deleted and no job submitted; --apply never changes the source hash",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 28
+    },
+    {
+      "id": "e17",
+      "obligation_ref": "o17",
+      "test_ref": "tests/test_cli.py::test_parse_error_hints_name_installed_command; ::test_help_and_hints_outside_t23_ownership_name_media; ::test_catalog_never_names_media_cli_as_a_command; teken cli doctor --strict 26/26",
+      "behavior_text": "parse-error and explain hints name 'media'; no stale 'media-cli <verb>' anywhere; rubric 26/26 at the commit",
+      "contract_text": "teken cli doctor --strict zero failures; every help/error hint names the installed command 'media'",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "full suite ran green (812 passed, 2 skipped, pytest exit 0) at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 29
+    },
+    {
+      "id": "e18",
+      "obligation_ref": "o1",
+      "test_ref": "tests/test_e2e_media.py::test_probe_duration_within_100ms; ::test_cut_2_to_5_is_3_seconds; ::test_black_box_mean_below_5",
+      "behavior_text": "installed 'media' on lavfi fixtures: probe 10.0s (tol 0.1); 2-5s cut measures 3.0s (tol 0.1); boxed region mean < 5 with a control showing the source region mean > 40",
+      "contract_text": "[frame claim c35] probe within 0.1s; 2-5s cut = 3.0s +/- 0.1; black-box mean < 5",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "e2e suite 18/18 green at the named commit; each assertion was mutation-checked to fail by the t25 agent",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:26:57+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 30
+    },
+    {
+      "id": "e19",
+      "obligation_ref": "o1",
+      "test_ref": "live: media edit plan/apply + job result on /home/spark/Videos/Screencasts/Screencast from 2026-04-14 17-31-58.mp4 (VFR, 2090x1384)",
+      "behavior_text": "10-20s cut + 400x200 black box via the daemon: job done in ~1s, box YAVG 0.0002 vs 20 outside at t=1/5/9, source sha unchanged; output duration 9.871s (last VFR frame before 20s sits ~2 frame intervals early)",
+      "contract_text": "[frame claim c35] cut and black-box behave on real footage",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "ran live on this host against the named commit; outputs in the session scratchpad",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:33:00+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 31
+    },
+    {
+      "id": "e20",
+      "obligation_ref": "o2",
+      "test_ref": "tests/test_media_search.py::test_live_finds_red_square_range (MEDIA_CLI_LIVE_GATEWAY=1, key injected via grant)",
+      "behavior_text": "build_index on the red-square fixture against live senses (nvidia/Gemma-4-26B-A4B-NVFP4) aborted with env.sense_unavailable 'malformed captions (wanted 4 strings)'; a reproduction showed Gemma returning 3 captions for a 4-frame batch of near-identical synthetic frames (1 of 5 batches); real screencast frames returned 4/4 twice",
+      "contract_text": "[frame claim c36] a semantic query for a red square finds the 4.0-6.0s range via live senses",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "live gateway test ran red at the named commit; root cause reproduced",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-10-01T09:37:25+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": true,
+      "seq": 32
+    },
+    {
+      "id": "e21",
+      "obligation_ref": "o2",
+      "test_ref": "tests/test_media_search.py dead-gateway tests; live run while the senses backend refused connections (gateway 503 backend_unavailable)",
+      "behavior_text": "with the backend unreachable the call fails with env.sense_unavailable (exit 2), no traceback, nothing cached; capabilities advertised loaded:true so locality was not the failing check",
+      "contract_text": "[frame claim c36] with no gateway reachable: typed exit-2 sense unavailable, not a traceback or empty result",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "observed live at the named commit plus stub tests green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:30:00+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 33
+    },
+    {
+      "id": "e22",
+      "obligation_ref": "o3",
+      "test_ref": "tests/test_e2e_media.py::test_submit_with_no_daemon_returns_job_id_fast; ::test_job_status_and_result_are_single_json_documents; live edit apply on a screencast",
+      "behavior_text": "no daemon beforehand: uv run media submit 0.285s / venv media 0.201s (e2e), 0.254s live; status/result are single JSON documents with empty stderr; rubric 26/26 before and after",
+      "contract_text": "[frame claim c37] submit < 1s with on-demand spawn; single-JSON status/result; rubric zero failures",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "e2e green and live run at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T09:33:00+03:00",
+        "commit": "8dc0e07"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 34
+    },
+    {
+      "id": "e23",
+      "obligation_ref": "o2",
+      "test_ref": "tests/test_media_search.py::test_live_finds_red_square_range (MEDIA_CLI_LIVE_GATEWAY=1, key injected via grant), run 3 times (2 with fresh XDG_CACHE_HOME)",
+      "behavior_text": "against live local senses nvidia/Gemma-4-26B-A4B-NVFP4: fps=2 index of the red-square fixture then query 'a red square' returns a hit range overlapping 4.0-6.0s; 3/3 runs passed after the d13 caption retry/per-frame fallback",
+      "contract_text": "[frame claim c36] a semantic query for a red square finds the 4.0-6.0s range via live senses",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "live gateway test ran green 3 of 3 times at the named commit; same test was red at 8dc0e07 (e20) before d13",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T10:14:08+03:00",
+        "commit": "49d5021"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 36
+    },
+    {
+      "id": "e24",
+      "obligation_ref": "o1",
+      "test_ref": "live: media edit apply --apply with XDG_RUNTIME_DIR 175-byte socket path; tests/test_daemon_client.py::test_long_runtime_dir_fails_fast_without_spawning; ::test_typed_errors_from_client_and_daemon_carry_remediation",
+      "behavior_text": "over-long socket path -> exit 2 env.socket_path_too_long with remediation 'set a shorter XDG_RUNTIME_DIR (e.g. /run/user/1000)', no daemon spawned, no files created; every typed client/daemon error carries a non-empty remediation",
+      "contract_text": "[plan obligation o1 / claim c16] every media failure is exit 1/2 with a stable machine code and a hint; no traceback",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "live repro and unit tests green at the named commit; the same path produced an empty remediation at 8dc0e07",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T10:15:04+03:00",
+        "commit": "49d5021"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 37
+    }
+  ],
+  "deltas": [
+    {
+      "id": "b1",
+      "kind": "amended",
+      "behavior_text": "Time base origin is the first presented video frame (not the container start_time); ffmpeg input seeks subtract the container start_time to match ffmpeg's input clock",
+      "caused_by": [
+        "d1",
+        "d2"
+      ],
+      "evidence_refs": [
+        "e3"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b2",
+      "kind": "amended",
+      "behavior_text": "A cut re-encodes audio (same codec/container); audio is stream-copied only for whole-file, frame-only edits",
+      "caused_by": [
+        "d3"
+      ],
+      "evidence_refs": [
+        "e18"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b3",
+      "kind": "added",
+      "behavior_text": "Filter-mode edits drop subtitle/attachment/data streams unless listed in keep; drops are listed in the dry-run plan",
+      "caused_by": [
+        "d4"
+      ],
+      "evidence_refs": [
+        "e9"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b4",
+      "kind": "added",
+      "behavior_text": "Daemon job completion never clobbers an output path that appeared after planning (input.output_exists) unless overwrite",
+      "caused_by": [
+        "d5"
+      ],
+      "evidence_refs": [
+        "e5"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b5",
+      "kind": "amended",
+      "behavior_text": "search index build verifies the served model with one /capabilities call and re-indexes on change; the query path makes zero verify calls",
+      "caused_by": [
+        "d6"
+      ],
+      "evidence_refs": [
+        "e11"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b6",
+      "kind": "added",
+      "behavior_text": "An output path whose extension does not match the source container is refused at plan time (input.output_container_mismatch)",
+      "caused_by": [
+        "d7"
+      ],
+      "evidence_refs": [],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b7",
+      "kind": "amended",
+      "behavior_text": "Blur rectangles widen to even 4:2:0 edges (<=1px per edge, reported as 'covered'); redaction windows start one frame interval early so the frame on screen at start is covered",
+      "caused_by": [
+        "d8",
+        "d9"
+      ],
+      "evidence_refs": [
+        "e9"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b8",
+      "kind": "added",
+      "behavior_text": "The daemon runs 'index' jobs (search index --apply) via a registered handler",
+      "caused_by": [
+        "d10"
+      ],
+      "evidence_refs": [],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b9",
+      "kind": "amended",
+      "behavior_text": "Every help and error hint names the installed command 'media' (prog=media)",
+      "caused_by": [
+        "d11"
+      ],
+      "evidence_refs": [
+        "e17"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b10",
+      "kind": "added",
+      "behavior_text": "probe --json exposes editable {start,end,frame_interval}; an end within one frame past editable.end is clamped and whole-file frame-only edits stay passthrough",
+      "caused_by": [
+        "d12"
+      ],
+      "evidence_refs": [
+        "e18"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b11",
+      "kind": "added",
+      "behavior_text": "Subverbs 'edit regions' (Gemma boxes + coverage), 'search purge' (dry-run first) and 'search cache' expose model-derived redaction and the purgeable/inspectable cache from the CLI",
+      "caused_by": [
+        "c48",
+        "c26",
+        "h1"
+      ],
+      "evidence_refs": [
+        "e10"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b12",
+      "kind": "amended",
+      "behavior_text": "Validation finding: indexing aborts the whole build when the live model returns the wrong caption count for one batch (Gemma-4 returned 3 for 4 near-identical frames); fails closed with env.sense_unavailable and caches nothing, but the c36 live success signal is unmet",
+      "caused_by": [
+        "c36"
+      ],
+      "evidence_refs": [
+        "e20"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": true
+    },
+    {
+      "id": "b13",
+      "kind": "amended",
+      "behavior_text": "Validation finding: a socket path over the AF_UNIX limit (deep XDG_RUNTIME_DIR) makes submit fail as env.daemon_unavailable (exit 2) with an EMPTY remediation, breaking the error/hint contract",
+      "caused_by": [
+        "c16"
+      ],
+      "evidence_refs": [],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": true
+    },
+    {
+      "id": "b14",
+      "kind": "amended",
+      "behavior_text": "Index captioning retries a batch once on a caption-count mismatch, then captions it frame by frame (never exceeding max_calls); still fails closed if a single frame stays malformed",
+      "caused_by": [
+        "d13",
+        "c36"
+      ],
+      "evidence_refs": [
+        "e23"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b15",
+      "kind": "added",
+      "behavior_text": "Daemon socket path length is checked up front (env.socket_path_too_long with a concrete hint, no spawn); no daemon/client error carries an empty remediation",
+      "caused_by": [
+        "d13",
+        "c16"
+      ],
+      "evidence_refs": [
+        "e24"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    }
+  ],
+  "supersessions": [
+    {
+      "id": "s1",
+      "action": "supersede",
+      "target_ref": "b12",
+      "replacement_ref": "b14",
+      "origin": "user"
+    },
+    {
+      "id": "s2",
+      "action": "supersede",
+      "target_ref": "b13",
+      "replacement_ref": "b15",
+      "origin": "user"
+    },
+    {
+      "id": "s3",
+      "action": "supersede",
+      "target_ref": "e20",
+      "replacement_ref": "e23",
+      "origin": "user"
+    }
+  ]
 }
