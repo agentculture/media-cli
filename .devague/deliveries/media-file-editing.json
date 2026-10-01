@@ -2,7 +2,7 @@
   "plan_slug": "media-file-editing",
   "schema_version": 2,
   "created": "2026-09-30T19:58:53Z",
-  "updated": "2026-10-01T07:15:26Z",
+  "updated": "2026-10-01T08:10:01Z",
   "deviations": [
     {
       "id": "d1",
@@ -659,6 +659,25 @@
       "status": "proposed",
       "superseded": false,
       "seq": 37
+    },
+    {
+      "id": "e25",
+      "obligation_ref": "o1",
+      "test_ref": "manual: user opened scratchpad/live/out/cut_box.mp4 and compare.png (media edit apply --apply on 'Screencast from 2026-04-14 17-31-58.mp4', 10-20s cut + 400x200 black box at 100,100)",
+      "behavior_text": "the user visually confirmed the edited clip and the side-by-side comparison: the cut starts at source 10s, the black box covers the requested region for the whole clip, and the rest of the frame is unchanged",
+      "contract_text": "[frame claim c35] cut and black-box redaction behave correctly on real footage",
+      "evidence_type": "manual",
+      "strength": "execution",
+      "strength_basis": "operator's own visual inspection of the live output rendered by the shipped CLI at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-10-01T10:48:00+03:00",
+        "commit": "0dd6dfd"
+      },
+      "origin": "user",
+      "status": "approved",
+      "superseded": false,
+      "seq": 38
     }
   ],
   "deltas": [
