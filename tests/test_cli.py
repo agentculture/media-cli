@@ -126,11 +126,6 @@ def test_top_level_help_describes_the_lane_and_lists_new_verbs(capsys) -> None:
         assert verb in out
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="help strings / explain hint in files t23 does not own still say 'media-cli': "
-    "_commands/{edit,search,job,cli}.py help=, media_cli/explain/__init__.py remediation",
-)
 def test_help_and_hints_outside_t23_ownership_name_media(capsys) -> None:
     with pytest.raises(SystemExit):
         main(["--help"])
@@ -138,7 +133,8 @@ def test_help_and_hints_outside_t23_ownership_name_media(capsys) -> None:
     rc = main(["explain", "nonexistent", "--json"])
     err = json.loads(capsys.readouterr().err)
     assert rc == 1
-    assert "media-cli" not in out and not _STALE_CMD.search(err["remediation"])
+    assert not _STALE_CMD.search(out) and not _STALE_CMD.search(err["remediation"])
+    assert "media explain" in err["remediation"]
 
 
 # --- whoami ---------------------------------------------------------------

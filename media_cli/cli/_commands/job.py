@@ -70,7 +70,7 @@ def _add_json(p: argparse.ArgumentParser) -> None:
 
 
 def register(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("job", help="Inspect/cancel daemon jobs (see 'media-cli job overview').")
+    p = sub.add_parser("job", help="Inspect/cancel daemon jobs (see 'media job overview').")
     _add_json(p)
     p.set_defaults(func=cmd_overview, json=False)
     ns = p.add_subparsers(dest="job_command", parser_class=type(p))
