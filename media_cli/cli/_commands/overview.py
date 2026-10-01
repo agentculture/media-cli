@@ -1,7 +1,7 @@
-"""``media-cli overview`` — read-only descriptive snapshot of the agent.
+"""``media overview`` — read-only descriptive snapshot of the agent.
 
-Describes the agent to an agent reader: identity (from culture.yaml), the verb
-surface, and the sibling-pattern artifacts this template carries. The shared
+Describes the agent to an agent reader: identity (from culture.yaml), its lane,
+the verb surface, and the artifacts it carries. The shared
 section/render helpers here are reused by the ``cli`` noun's ``overview`` (see
 :mod:`media_cli.cli._commands.cli`).
 
@@ -17,8 +17,18 @@ import argparse
 from media_cli.cli._commands.whoami import report
 from media_cli.cli._output import emit_result
 
+_LANE = [
+    "owns the local media I/O device plane and the editing of the media captured from it",
+    "moves and transforms bytes; interpretation goes to the local lobes senses gateway "
+    "(local-only, fail-closed)",
+    "not here: capture (webcam-cli), generation (innereye, harmonics-cli), "
+    "shell/ffmpeg passthrough (shell-cli)",
+    "device-plane inventory verbs (list/describe) are not built yet",
+]
+
 _ARTIFACTS = [
     "culture.yaml + AGENTS.colleague.md — mesh identity (suffix + backend)",
+    "docs/specs/2026-09-30-media-file-editing.md — the media-file editing spec",
     ".claude/skills/ — the canonical guildmaster skill kit (cite-don't-import)",
     "docs/skill-sources.md — skill provenance ledger",
     "pyproject.toml + .github/workflows/ — buildable, deployable package baseline",
@@ -30,6 +40,13 @@ _VERBS = [
     "explain <path> — markdown docs for a topic",
     "overview — this descriptive snapshot",
     "doctor — check the agent-identity invariants",
+    "probe <file> — streams, duration and time origin of a media file (read-only)",
+    "frames <file> — extract PNG frames / contact sheet locally (read-only toward the source)",
+    "edit plan|apply|regions|overview — JSON edit lists compiled to ffmpeg; "
+    "apply is a dry run unless --apply",
+    "search index|query|purge|cache|overview — semantic search of frames and speech, "
+    "with evidence",
+    "job status|result|cancel|list|overview — poll daemon jobs by id (never starts the daemon)",
 ]
 
 
@@ -46,8 +63,9 @@ def agent_sections() -> list[dict[str, object]]:
                 f"model: {ident['model']}",
             ],
         },
+        {"title": "Lane", "items": list(_LANE)},
         {"title": "Verbs", "items": list(_VERBS)},
-        {"title": "Sibling-pattern artifacts", "items": list(_ARTIFACTS)},
+        {"title": "Artifacts", "items": list(_ARTIFACTS)},
     ]
 
 
@@ -64,6 +82,12 @@ def cli_sections() -> list[dict[str, object]]:
                 "every command supports --json",
                 "results to stdout, errors/diagnostics to stderr (never mixed)",
                 "exit codes: 0 success, 1 user error, 2 environment error, 3+ reserved",
+                "write verbs (edit apply, search index, search purge) are a dry run "
+                "unless --apply",
+                "the media daemon is spawned on demand only by a submit (edit apply --apply, "
+                "search index --apply); no read-only verb starts it",
+                "times are normalized seconds from the first presented video frame",
+                "the installed command is 'media'; 'media-cli' is the distribution and nick",
             ],
         },
     ]

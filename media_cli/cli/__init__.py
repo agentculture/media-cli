@@ -1,9 +1,12 @@
-"""Unified CLI entry point for media-cli.
+"""Unified CLI entry point: the installed ``media`` command (distribution ``media-cli``).
 
 The agent-first global verbs (``whoami``, ``learn``, ``explain``, ``overview``,
-``doctor``) are registered here under :mod:`media_cli.cli._commands`,
-alongside the ``cli`` noun group. Future noun groups register via their own
-``register()`` functions following the same pattern.
+``doctor``), the read-only media verbs (``probe``, ``frames``) and the noun
+groups (``cli``, ``edit``, ``search``, ``job``) are registered here from
+:mod:`media_cli.cli._commands`; each module exposes ``register(sub)``.
+
+``prog`` is ``media`` -- the console script -- so ``--help``, usage lines and
+every argparse ``hint:`` name a command an agent can actually run.
 
 Error propagation contract
 --------------------------
@@ -29,6 +32,8 @@ from media_cli.cli._errors import EXIT_USER_ERROR, CliError
 from media_cli.cli._output import emit_error
 
 _ISSUES_URL = "https://github.com/agentculture/media-cli/issues"
+#: the installed console command ([project.scripts] media = ...); not the dist name
+PROG = "media"
 
 
 class _CliArgumentParser(argparse.ArgumentParser):
@@ -64,14 +69,24 @@ def _argv_has_json(argv: list[str] | None) -> bool:
 def _build_parser() -> argparse.ArgumentParser:
     from media_cli.cli._commands import cli as _cli_group
     from media_cli.cli._commands import doctor as _doctor_cmd
+    from media_cli.cli._commands import edit as _edit_group
     from media_cli.cli._commands import explain as _explain_cmd
+    from media_cli.cli._commands import frames as _frames_cmd
+    from media_cli.cli._commands import job as _job_group
     from media_cli.cli._commands import learn as _learn_cmd
     from media_cli.cli._commands import overview as _overview_cmd
+    from media_cli.cli._commands import probe as _probe_cmd
+    from media_cli.cli._commands import search as _search_group
     from media_cli.cli._commands import whoami as _whoami_cmd
 
     parser = _CliArgumentParser(
-        prog="media-cli",
-        description="media-cli — a clonable template for AgentCulture mesh agents.",
+        prog=PROG,
+        description=(
+            "media (dist: media-cli) — owns the local media I/O device plane and the "
+            "editing of the media captured from it: probe files, peek at frames, search "
+            "frames and speech, and run JSON edit lists as daemon jobs. Write verbs are a "
+            "dry run unless --apply. Start with 'media learn'."
+        ),
     )
     parser.add_argument(
         "--version",
@@ -88,9 +103,12 @@ def _build_parser() -> argparse.ArgumentParser:
     _overview_cmd.register(sub)
     _doctor_cmd.register(sub)
     _cli_group.register(sub)
-    # Register your own noun groups here:
-    #   from media_cli.cli._commands import my_noun as _my_noun_group
-    #   _my_noun_group.register(sub)
+    # media verbs (each also needs a catalog entry, an overview _VERBS line and a learn row)
+    _probe_cmd.register(sub)
+    _frames_cmd.register(sub)
+    _edit_group.register(sub)
+    _search_group.register(sub)
+    _job_group.register(sub)
 
     return parser
 
