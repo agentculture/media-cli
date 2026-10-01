@@ -160,7 +160,7 @@ def _add_sampling(p: argparse.ArgumentParser) -> None:
 
 
 def register(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("search", help="Index and query media (see 'media-cli search overview').")
+    p = sub.add_parser("search", help="Index and query media (see 'media search overview').")
     _add_json(p)
     p.set_defaults(func=cmd_overview, json=False)
     ns = p.add_subparsers(dest="search_command", parser_class=type(p))

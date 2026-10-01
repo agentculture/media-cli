@@ -123,7 +123,7 @@ def _add_json(p: argparse.ArgumentParser) -> None:
 
 
 def register(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("edit", help="Plan/apply edit lists (see 'media-cli edit overview').")
+    p = sub.add_parser("edit", help="Plan/apply edit lists (see 'media edit overview').")
     _add_json(p)
     p.set_defaults(func=cmd_overview, json=False)
     # propagate the structured parser class so noun parse errors exit 1, not 2
