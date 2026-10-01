@@ -198,11 +198,19 @@ touches the daemon.
      "streams": [{"index", "type", "codec", "duration", "start_time", "fps",
                   "width", "height", "sample_rate", "channels",
                   "disposition", "tags", "attached_pic"}],
-     "video": <stream>|null, "audio": <stream>|null, "origin": <raw seconds>}
+     "video": <stream>|null, "audio": <stream>|null, "origin": <raw seconds>,
+     "editable": {"start": 0.0, "end": <normalized seconds>,
+                  "frame_interval": <seconds>|null}}
 
 `origin` is the raw time of the first presented video frame: normalized second
 `0.0` everywhere else in `media`. `duration`/`start_time` are raw container
 values, reported for transparency. `video` skips attached cover art.
+
+`editable` is the normalized range edit lists are validated against. A segment
+`end` up to one frame past `editable.end` is clamped to it; a single segment
+that starts at the first frame and ends within half a frame of `editable.end`
+counts as the whole file, so frame-only ops stay `passthrough` with
+stream-copied audio. Use `editable.end` (not `duration`) for "to the end".
 
 ## Errors
 
@@ -360,7 +368,8 @@ ffmpeg encode, no daemon. Every rejection happens here, before any process runs.
 
 - exit 1: `input.editlist_invalid` (message starts with the JSON path, e.g.
   `segments[1].ops[0].regions[2].w: ...`), `input.unreadable`,
-  `input.timestamp_out_of_range`, `input.region_outside_frame`,
+  `input.timestamp_out_of_range` (times must lie in `media probe <file> --json`
+  -> `editable`; see `media explain probe`), `input.region_outside_frame`,
   `input.region_too_small` (blur area too small), `input.output_is_source`,
   `input.output_exists`, `input.output_dir_missing`,
   `input.output_container_mismatch`, `input.container_incompatible`,
