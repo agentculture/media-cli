@@ -203,7 +203,7 @@ def test_mixed_size_segments_still_join(media_mp4, tmp_path, monkeypatch):
 def test_vfr_source_segments_join(media_vfr_offset, tmp_path):
     doc = _doc(
         media_vfr_offset,
-        tmp_path / "v.mp4",
+        tmp_path / "v.mkv",
         THREE,
         [
             {"type": "xfade", "style": "fade", "duration": 0.5},

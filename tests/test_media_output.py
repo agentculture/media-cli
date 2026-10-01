@@ -233,3 +233,46 @@ def test_to_dict_json_serializable(media_mp4, tmp_path):
     d = out.plan_output(media_mp4, tmp_path / "o.mp4", {0}).to_dict()
     json.dumps(d)
     assert d["streams"][0]["action"] == "encode" and d["container"] == "mp4"
+
+
+@pytest.mark.parametrize(
+    "name,expect",
+    [("out.mp4", ".mkv"), ("out.MP4", ".mkv"), ("out", ".mkv"), ("out.webm", ".mkv")],
+)
+def test_mkv_source_mismatched_extension_refused(media_mkv_vp8_opus, tmp_path, name, expect):
+    with pytest.raises(MediaInputError) as e:
+        out.plan_output(media_mkv_vp8_opus, tmp_path / name, set())
+    assert e.value.kind == out.INPUT_OUTPUT_CONTAINER_MISMATCH == "input.output_container_mismatch"
+    assert expect in e.value.message
+
+
+def test_mp4_source_expects_mp4_m4v_and_case_insensitive(media_mp4, tmp_path):
+    with pytest.raises(MediaInputError) as e:
+        out.plan_output(media_mp4, tmp_path / "o.mkv", set())
+    assert ".mp4" in e.value.message and ".m4v" in e.value.message
+    assert out.plan_output(media_mp4, tmp_path / "o.MP4", set()).container == "mp4"
+    assert out.plan_output(media_mp4, tmp_path / "o.m4v", set()).container == "mp4"
+
+
+def test_mov_and_webm_expected_extensions(tmp_path):
+    for fmt, src, bad, want in (
+        ("mov,mp4,m4a,3gp,3g2,mj2", "a.mov", "b.mp4", ".mov"),
+        ("matroska,webm", "a.webm", "b.mkv", ".webm"),
+    ):
+        info = _fake(tmp_path / src, fmt, ("video", "vp9", False))
+        with pytest.raises(MediaInputError) as e:
+            out.plan_output(tmp_path / src, tmp_path / bad, set(), info=info)
+        assert e.value.kind == out.INPUT_OUTPUT_CONTAINER_MISMATCH and want in e.value.message
+
+
+def test_mismatch_checked_before_fallback_and_exists(media_mp4, tmp_path):
+    (tmp_path / "x.mkv").write_bytes(b"old")
+    with pytest.raises(MediaInputError) as e:
+        out.plan_output(media_mp4, tmp_path / "x.mkv", set())
+    assert e.value.kind == out.INPUT_OUTPUT_CONTAINER_MISMATCH
+
+
+def test_m4a_accepted_for_mp4_family_source(tmp_path):
+    info = _fake(tmp_path / "t.m4a", "mov,mp4,m4a,3gp,3g2,mj2", ("audio", "aac", False))
+    plan = out.plan_output(tmp_path / "t.m4a", tmp_path / "o.m4a", {0}, info=info)
+    assert plan.container == "mp4" and plan.dst.endswith("o.m4a")

@@ -50,6 +50,7 @@ INPUT_OUTPUT_IS_SOURCE = "input.output_is_source"
 INPUT_OUTPUT_EXISTS = "input.output_exists"
 INPUT_OUTPUT_DIR_MISSING = "input.output_dir_missing"
 INPUT_CONTAINER_INCOMPATIBLE = "input.container_incompatible"
+INPUT_OUTPUT_CONTAINER_MISMATCH = "input.output_container_mismatch"
 
 _EXT_CONTAINER = {
     ".mp4": "mp4",
@@ -58,6 +59,13 @@ _EXT_CONTAINER = {
     ".mkv": "matroska",
     ".webm": "webm",
     ".avi": "avi",
+}
+_CONTAINER_EXTS = {
+    "mp4": (".mp4", ".m4v", ".m4a"),
+    "mov": (".mov",),
+    "matroska": (".mkv",),
+    "webm": (".webm",),
+    "avi": (".avi",),
 }
 _CONTAINER_EXT = {"mp4": ".mp4", "mov": ".mov", "matroska": ".mkv", "webm": ".webm", "avi": ".avi"}
 
@@ -229,6 +237,20 @@ def _check_dst(src: str, dst: str, overwrite: bool) -> None:
         )
 
 
+def _check_extension(dst: str, container: str | None) -> None:
+    """Refuse a requested output name whose extension is not the source container's."""
+    exts = _CONTAINER_EXTS.get(container or "")
+    if exts is None or os.path.splitext(dst)[1].lower() in exts:
+        return
+    want = " or ".join(f"'{e}'" for e in exts)
+    raise MediaInputError(
+        INPUT_OUTPUT_CONTAINER_MISMATCH,
+        f"output extension of {dst!r} does not match the source container ({container}); "
+        f"expected {want}",
+        f"name the output with {want}; the output container is always the source container",
+    )
+
+
 def plan_output(
     src: str | os.PathLike,
     dst: str | os.PathLike,
@@ -245,6 +267,7 @@ def plan_output(
     touched, dropped = set(touched_streams), set(drop_streams)
 
     container = _container_of(src_s, info.format_name)
+    _check_extension(dst_s, container)
     fallback: str | None = None
     decisions: list[StreamDecision] = []
     for s in info.streams:
