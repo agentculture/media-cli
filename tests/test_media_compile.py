@@ -1003,3 +1003,18 @@ def test_audio_only_cut_concat(tmp_path):
     assert c.expected_duration == pytest.approx(2.5)
     dst = _run(c)
     assert P.probe(dst).audio.duration == pytest.approx(2.5, abs=0.05)
+
+
+@pytest.mark.parametrize("trim,mode", [(0.0, "remux"), (0.015, "remux"), (0.03, "filter")])
+def test_whole_file_tolerance_is_half_a_frame(media_mp4, tmp_path, trim, mode):
+    # 25 fps -> half a frame is 0.02s; an end that close to the editable end is the whole file.
+    info = P.probe(media_mp4)
+    doc = _doc(media_mp4, tmp_path / "w.mp4", [{"start": 0, "end": info.end - trim}])
+    assert _compile(doc).mode == mode
+
+
+def test_end_past_editable_end_within_one_frame_is_clamped_whole_file(media_mp4, tmp_path):
+    info = P.probe(media_mp4)
+    c = _compile(_doc(media_mp4, tmp_path / "c.mp4", [{"start": 0, "end": info.end + 0.03}]))
+    assert c.mode == "remux"
+    assert c.segments[0]["end"] == pytest.approx(info.end)

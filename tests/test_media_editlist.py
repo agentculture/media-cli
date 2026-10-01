@@ -20,7 +20,7 @@ from media_cli.media.probe import MediaInfo, StreamInfo
 INVALID = E.INPUT_EDITLIST_INVALID
 
 
-def make_info(duration=10.0, start=0.0, width=320, height=240, video_start=None):
+def make_info(duration=10.0, start=0.0, width=320, height=240, video_start=None, fps=None):
     streams = [
         StreamInfo(
             index=0,
@@ -29,6 +29,7 @@ def make_info(duration=10.0, start=0.0, width=320, height=240, video_start=None)
             start_time=start if video_start is None else video_start,
             width=width,
             height=height,
+            fps=fps,
         ),
         StreamInfo(index=1, type="audio", codec="aac", start_time=start),
     ]
@@ -424,3 +425,32 @@ def test_inputs_not_mutated():
     snap = copy.deepcopy(obj)
     E.validate(E.parse(obj), INFO)
     assert obj == snap
+
+
+def _one_seg(end):
+    return E.parse({"input": "a", "output": "b", "segments": [{"start": 0, "end": end}]})
+
+
+def test_end_within_one_frame_past_editable_end_is_clamped():
+    info = make_info(duration=10.0, fps=25.0)  # frame interval 0.04
+    for end in (10.0, 10.02, 10.04):
+        out = E.validate(_one_seg(end), info)
+        assert out.segments[0].end == info.end
+    assert _one_seg(10.02).segments[0].end == 10.02  # input not mutated
+
+
+def test_end_beyond_one_frame_is_refused_and_names_probe_bound():
+    info = make_info(duration=10.0, fps=25.0)
+    with pytest.raises(MediaInputError) as ei:
+        E.validate(_one_seg(10.05), info)
+    assert ei.value.kind == T
+    assert "segments[0].end" in ei.value.message
+    assert "editable.end" in ei.value.message + ei.value.remediation
+    assert "10.000" in ei.value.message
+    assert "media probe" in ei.value.remediation and "--json" in ei.value.remediation
+
+
+def test_no_frame_interval_means_no_slack():
+    info = make_info(duration=10.0)  # fps unknown
+    with pytest.raises(MediaInputError):
+        E.validate(_one_seg(10.01), info)

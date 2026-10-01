@@ -30,6 +30,13 @@ VFR: frame times are read lazily with ``ffprobe -show_entries
 frame=pts_time`` only when a frame-index mapping is requested, sorted into
 presentation order, normalized, and cached per (path, mtime, size).
 
+Editable range: ``to_dict()`` carries ``"editable": {"start": 0.0, "end": <MediaInfo.end>,
+"frame_interval": <nominal 1/fps of the video, or null>}`` -- the exact bound edit
+planning uses (all in the base above).  ``end`` is the container span, which can run past
+the last video frame (e.g. an audio tail); an edit-list end within one ``frame_interval``
+of it is clamped to it and counts as the whole file (see ``editlist.validate`` and
+``compile._full_range``).
+
 Every ffprobe call goes through ``media_cli.media._tools.run``.
 """
 
@@ -108,6 +115,12 @@ class MediaInfo:
             return float("inf")
         return self.start_time + self.duration - self.origin
 
+    @property
+    def frame_interval(self) -> float | None:
+        """Nominal seconds per video frame (1/fps), or None without a video/fps."""
+        v = self.video
+        return 1.0 / v.fps if v is not None and v.fps else None
+
     def to_source_seconds(self, t: float) -> float:
         return t + self.origin
 
@@ -120,6 +133,7 @@ class MediaInfo:
         d["video"] = None if self.video is None else d["streams"][self.streams.index(self.video)]
         d["audio"] = None if self.audio is None else d["streams"][self.streams.index(self.audio)]
         d["origin"] = self.origin
+        d["editable"] = {"start": 0.0, "end": self.end, "frame_interval": self.frame_interval}
         return d
 
 

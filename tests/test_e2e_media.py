@@ -234,12 +234,15 @@ def test_mkv_cut_and_redact_stays_mkv_opus_reencoded(e2e, media_mkv_vp8_opus):
     assert plan["output"]["container_fallback"] in (None, False, "")
 
 
-def test_mkv_whole_file_box_copies_audio_byte_identical(e2e, media_mkv_vp8_opus):
-    out = e2e.work / "whole.mkv"
-    # "Whole file" = the media's full normalized span.  NB: probe.duration says 10.008 (audio
-    # tail) and edit plan refuses it ("0 to 10.001s"); 10.0 is accepted but is NOT the whole
-    # span (plan stays in filter mode and re-encodes audio).  10.001 is the video end.
-    src_dur = 10.001
+@pytest.mark.parametrize("end_of", ["editable_end", "ten_seconds"])
+def test_mkv_whole_file_box_copies_audio_byte_identical(e2e, media_mkv_vp8_opus, end_of):
+    out = e2e.work / f"whole_{end_of}.mkv"
+    # d12: probe's JSON exposes the editable range; an end at (or within one frame of)
+    # editable.end is the whole file, so frame-only edits stay passthrough with copied audio.
+    editable = mj(e2e, "probe", str(media_mkv_vp8_opus))["editable"]
+    assert editable["start"] == 0.0
+    end = editable["end"] if end_of == "editable_end" else 10.0
+    assert abs(end - editable["end"]) <= editable["frame_interval"]
     region = {"x": 10, "y": 10, "w": 60, "h": 60}
     doc = {
         "input": str(media_mkv_vp8_opus),
@@ -247,12 +250,13 @@ def test_mkv_whole_file_box_copies_audio_byte_identical(e2e, media_mkv_vp8_opus)
         "segments": [
             {
                 "start": 0,
-                "end": src_dur,
+                "end": end,
                 "ops": [{"op": "box", "regions": [region], "fill": "black"}],
             }
         ],
     }
-    plan, _, _ = run_edit(e2e, "mkv_whole", doc)
+    plan, _, _ = run_edit(e2e, f"mkv_whole_{end_of}", doc)
+    assert plan["mode"] == "passthrough", plan.get("mode")
     actions = {s["type"]: s["action"] for s in plan["output"]["streams"]}
     assert actions["audio"] == "copy", plan["output"]["streams"]
     assert actions["video"] == "encode"
