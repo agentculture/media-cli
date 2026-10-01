@@ -517,6 +517,59 @@ def test_ffmpeg_job_success_progress_and_atomic_replace(run_daemon, tmp_path):
     assert not pid_alive(rec["meta"]["pid"])
 
 
+def _lavfi_job(tmp_path, **extra):
+    out = tmp_path / "out.mkv"
+    tmp_out = tmp_path / ".out.partial.mkv"
+    args = ["-hide_banner", "-y", "-f", "lavfi", "-i", "testsrc=d=1:size=160x120:rate=10"]
+    args += ["-c:v", "mpeg4", "-f", "matroska", str(tmp_out)]
+    job = {"kind": "ffmpeg", "args": args, "output": str(out), "tmp_output": str(tmp_out)}
+    job.update(extra)
+    return job, out, tmp_out
+
+
+@needs_ffmpeg
+def test_ffmpeg_job_does_not_clobber_output_created_after_planning(run_daemon, tmp_path):
+    d = run_daemon()
+    job, out, tmp_out = _lavfi_job(tmp_path)
+    out.write_bytes(b"appeared after planning")  # exists before completion, no overwrite
+    jid = request(d.sock, {"op": "submit", "job": job})["job_id"]
+    rec = wait_state(d.sock, jid, {"done", "failed"})
+    assert rec["state"] == "failed", rec
+    assert rec["error"]["kind"] == "input.output_exists"
+    assert str(out) in rec["error"]["message"]
+    assert out.read_bytes() == b"appeared after planning"
+    assert not tmp_out.exists()
+
+
+@needs_ffmpeg
+def test_ffmpeg_job_overwrite_true_replaces_existing_output(run_daemon, tmp_path):
+    d = run_daemon()
+    job, out, tmp_out = _lavfi_job(tmp_path, overwrite=True)
+    out.write_bytes(b"old")
+    jid = request(d.sock, {"op": "submit", "job": job})["job_id"]
+    rec = wait_state(d.sock, jid, {"done", "failed"})
+    assert rec["state"] == "done", rec
+    assert out.stat().st_size > len(b"old")
+    assert not tmp_out.exists()
+
+
+@needs_ffmpeg
+def test_ffmpeg_job_normal_publish_leaves_no_tmp(run_daemon, tmp_path):
+    d = run_daemon()
+    job, out, tmp_out = _lavfi_job(tmp_path, overwrite=False)
+    jid = request(d.sock, {"op": "submit", "job": job})["job_id"]
+    rec = wait_state(d.sock, jid, {"done", "failed"})
+    assert rec["state"] == "done", rec
+    assert out.stat().st_size > 0 and not tmp_out.exists()
+
+
+def test_ffmpeg_job_overwrite_must_be_bool(run_daemon):
+    d = run_daemon()
+    job = {"kind": "ffmpeg", "args": ["-version"], "overwrite": "yes"}
+    resp = request(d.sock, {"op": "submit", "job": job})
+    assert not resp["ok"]
+
+
 @needs_ffmpeg
 def test_ffmpeg_job_failure_marks_failed_and_removes_tmp(run_daemon, tmp_path):
     d = run_daemon()
