@@ -253,8 +253,9 @@ PR #4's first CI run found what the validation pass had missed:
 
 ## Remaining Work / Follow-up
 
-- Re-check the SonarCloud gate on PR #4 after the `b0298cc` push, and triage
-  the 282 non-gating code smells.
+- After the `a7ce61e` push, PR #4's CI passed: both test jobs, lint,
+  version-check, GitGuardian and the TestPyPI dry-run, plus the SonarCloud
+  quality gate. The 282 non-gating code smells still need triage.
 
 No plan task is partial, dropped or blocked. Remaining items:
 
