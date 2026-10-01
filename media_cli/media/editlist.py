@@ -40,8 +40,9 @@ Time base (approved deviation d1)
 ---------------------------------
 All times are **normalized seconds**: seconds from the first presented video
 frame, as defined in :mod:`media_cli.media.probe`.  Validation bounds them to
-``[0, info.end]``.  The container ``start_time`` is never added here; the
-compiler converts to raw timestamps with ``probe.to_source_seconds()``.
+``[0, info.end]`` (``editable`` in ``media probe --json``); a segment end up to one
+nominal frame past ``info.end`` is clamped to it.  The container ``start_time`` is never
+added here; the compiler converts to raw timestamps with ``probe.to_source_seconds()``.
 Region ``start``/``end`` are in the same absolute normalized base and must lie
 inside their segment.  Segment "length" in fade/transition checks is the
 *source* length ``end - start`` (before any ``speed`` op).  Regions and crops
@@ -63,7 +64,7 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from media_cli.media.errors import (
@@ -170,11 +171,12 @@ def _invalid(path: str, msg: str) -> MediaInputError:
     )
 
 
-def _time_err(path: str, msg: str) -> MediaInputError:
+def _time_err(path: str, msg: str, remediation: str | None = None) -> MediaInputError:
     return MediaInputError(
         INPUT_TIMESTAMP_OUT_OF_RANGE,
         f"{path}: {msg}",
-        "use normalized seconds (from the first presented frame) within the media and segment",
+        remediation
+        or "use normalized seconds (from the first presented frame) within the media and segment",
     )
 
 
@@ -423,8 +425,22 @@ def _validate_ops(seg: Segment, path: str, info: MediaInfo) -> None:
 
 
 def validate(editlist: EditList, info: MediaInfo) -> EditList:
-    """Check ``editlist`` against probe facts.  Pure: no I/O, no subprocess."""
+    """Check ``editlist`` against probe facts.  Pure: no I/O, no subprocess.
+
+    Returns the edit list to use.  A segment end at or up to one nominal frame interval
+    (``info.frame_interval``) past ``info.end`` -- the ``editable.end`` of ``media probe
+    --json`` -- is clamped to ``info.end``; ends further beyond raise.  Without a known
+    frame interval there is no slack beyond ``EPSILON``.
+    """
     end_limit = info.end
+    slack = info.frame_interval or 0.0
+    clamped = []
+    for seg in editlist.segments:
+        if end_limit + EPSILON < seg.end <= end_limit + slack + EPSILON:
+            seg = replace(seg, end=end_limit)
+        clamped.append(seg)
+    if tuple(clamped) != editlist.segments:
+        editlist = replace(editlist, segments=tuple(clamped))
     for i, seg in enumerate(editlist.segments):
         path = f"segments[{i}]"
         if seg.start < -EPSILON or seg.start > end_limit + EPSILON:
@@ -434,7 +450,11 @@ def validate(editlist: EditList, info: MediaInfo) -> EditList:
             )
         if seg.end > end_limit + EPSILON or seg.end < -EPSILON:
             raise _time_err(
-                _join(path, "end"), f"{seg.end}s is outside the media (0 to {end_limit:.3f}s)"
+                _join(path, "end"),
+                f"{seg.end}s is outside the media (0 to {end_limit:.3f}s; the editable end is "
+                f"{end_limit:.3f}s, `media probe <file> --json` -> editable.end)",
+                "read editable.end from `media probe <file> --json` and use an end "
+                "at or below it (within one frame past it is clamped)",
             )
         if seg.end <= seg.start:
             raise _time_err(

@@ -35,7 +35,8 @@ Modes
                 first frame lies after the cut), run through its ops, then
                 concatenated (``concat``) or joined by transitions (``xfade`` +
                 ``acrossfade``).  Frame-accurate: trim + re-encode.
-``passthrough`` A single segment covering the whole file whose ops touch only
+``passthrough`` A single segment covering the whole file (starts at the first frame, ends
+                within half a nominal frame of ``editable.end``) whose ops touch only
                 the video frames (no ``a`` nodes, no retiming): no trim, the
                 audio is stream-copied, and the video keeps the input clock so
                 A/V sync with the copied audio is preserved.
@@ -308,7 +309,11 @@ def _full_range(el: E.EditList, info: MediaInfo) -> bool:
     if len(el.segments) != 1 or el.transitions:
         return False
     seg = el.segments[0]
-    return seg.start <= EPSILON and seg.end >= info.end - EPSILON
+    # Whole-file tolerance (d12): starts at the first frame and ends within half a nominal
+    # frame interval of editable.end (``info.end``; EPSILON when the fps is unknown).  Ends
+    # past editable.end by up to one frame were already clamped to it by ``E.validate``.
+    tol = (info.frame_interval or 0.0) / 2 + EPSILON
+    return seg.start <= EPSILON and seg.end >= info.end - tol
 
 
 def _passthrough_ok(segs: list[_Seg]) -> bool:
@@ -426,7 +431,7 @@ def _head(src: str) -> tuple[list[str], list[str]]:
 
 def compile_editlist(el: E.EditList, info: MediaInfo, *, fast: bool = False) -> CompiledEdit:
     """Compile a (re-validated) edit list against its probe facts into one ffmpeg argv."""
-    E.validate(el, info)
+    el = E.validate(el, info)  # may clamp an end within one frame past editable.end
     src, dst = os.path.abspath(el.input), os.path.abspath(el.output)
     if fast:
         return _compile_fast(el, info, src, dst)

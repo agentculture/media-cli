@@ -153,3 +153,30 @@ def test_directory_unreadable(tmp_path):
     with pytest.raises(MediaInputError) as ei:
         P.probe(tmp_path)
     assert ei.value.kind == INPUT_UNREADABLE
+
+
+def test_probe_json_exposes_editable_range(media_mp4):
+    info = P.probe(media_mp4)
+    d = info.to_dict()
+    json.dumps(d)
+    assert d["editable"]["start"] == 0.0
+    assert d["editable"]["end"] == pytest.approx(info.end)
+    assert d["editable"]["frame_interval"] == pytest.approx(1 / 25.0)
+
+
+def test_editable_end_is_normalized_not_container_duration(media_mkv_vp8_opus):
+    d = P.probe(media_mkv_vp8_opus).to_dict()
+    info = P.probe(media_mkv_vp8_opus)
+    assert d["editable"]["end"] == pytest.approx(info.end)
+    assert d["editable"]["end"] == pytest.approx(info.start_time + info.duration - info.origin)
+
+
+def test_editable_frame_interval_null_without_video():
+    info = P.MediaInfo(
+        path="a.wav",
+        format_name="wav",
+        duration=3.0,
+        start_time=0.0,
+        streams=(P.StreamInfo(index=0, type="audio", codec="pcm_s16le"),),
+    )
+    assert info.to_dict()["editable"] == {"start": 0.0, "end": 3.0, "frame_interval": None}
