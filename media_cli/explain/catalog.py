@@ -414,7 +414,8 @@ its log path and progress.
 Every `media edit plan` error (validated before submitting), including
 `input.output_container_mismatch` when the output extension does not match the
 source container, plus on `--apply`: `env.daemon_unavailable`,
-`env.daemon_setup`, `env.daemon_protocol` (exit 2). A job that fails later
+`env.daemon_setup`, `env.daemon_protocol`, `env.socket_path_too_long` (exit 2;
+see `media explain search index`). A job that fails later
 reports its error inside `media job result` (`job.error.kind`, e.g.
 `env.ffmpeg_failed` with the stderr tail and `log_path`, or
 `input.output_exists` if the path appeared after planning).
@@ -546,10 +547,18 @@ Frames and captions stay on this host: the `senses` role must be served
 locally (verified via the gateway's `/capabilities`), otherwise the job fails
 with `env.sense_not_local`.
 
+A batch whose reply has the wrong caption count is retried once, then captioned
+frame by frame, so a build can use more sense calls than the dry run planned --
+never more than `--max-calls`. A frame that still fails raises
+`env.sense_unavailable` and nothing is cached.
+
 ## Errors
 
 - exit 1: `input.budget_exceeded`, `input.bad_index_request`, `input.unreadable`.
-- exit 2: `env.ffmpeg_missing`, `env.daemon_unavailable`, `env.daemon_setup`.
+- exit 2: `env.ffmpeg_missing`, `env.daemon_unavailable`, `env.daemon_setup`,
+  `env.socket_path_too_long` (the socket path
+  `$XDG_RUNTIME_DIR/media-cli/daemon.sock` exceeds the 107-byte AF_UNIX limit;
+  set a shorter `XDG_RUNTIME_DIR`, e.g. `/run/user/<uid>`; no daemon is spawned).
 - inside the job record: `env.sense_unavailable`, `env.sense_not_local`.
 
 """ + _EXIT
