@@ -1,0 +1,147 @@
+{
+  "plan_slug": "media-file-editing",
+  "schema_version": 2,
+  "created": "2026-09-30T19:58:53Z",
+  "updated": "2026-10-01T05:41:35Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "t5 criterion 2: the time-base origin is the first presented video frame's start_time, not the container start_time; later tasks convert with probe.to_source_seconds()/from_source_seconds() and never add the container start_time themselves",
+      "task_ref": "t5",
+      "reason": "On the VFR fixture the container start_time (1.477s, from the audio stream) precedes the first video frame (1.500s), so subtracting it literally would put the first presented frame at 0.023s, contradicting spec c50/h40 ('seconds from the first presented frame'). User approved 2026-09-30.",
+      "affects": [
+        "c50",
+        "h40",
+        "t7",
+        "t8",
+        "t9",
+        "t10"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 1
+    },
+    {
+      "id": "d2",
+      "what": "t9 writes its PNGs with its own atomic temp-file + os.link/os.replace instead of output.py's helper, and seeks with to_source_seconds(t) - container start_time to match ffmpeg 6.1's input-relative -ss clock",
+      "task_ref": "t9",
+      "reason": "output.plan_output plans media containers from a source and would rewrite a .png dst to .mkv; the same no-partial-file / no-overwrite guarantee (obligation o5) is kept and tested. ffmpeg's input -ss is relative to the container start_time even with -copyts (verified on this host); probe's normalized base is unchanged. User approved 2026-10-01.",
+      "affects": [
+        "c43",
+        "c11"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 2
+    },
+    {
+      "id": "d3",
+      "what": "h43/t25: an mkv (vp8+opus) cut re-encodes its audio to opus in the same container; audio is stream-copied only when the edit spans the whole file with frame-only video ops. t25 asserts same container+codec, copy only for untouched audio",
+      "task_ref": "t25",
+      "reason": "Trimming audio frame-accurately requires re-encoding it, so 'opus stream-copied where untouched' cannot apply to a cut (found while building t10's compiler). User approved 2026-10-01.",
+      "affects": [
+        "h43",
+        "c56",
+        "t10"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 3
+    },
+    {
+      "id": "d4",
+      "what": "Filter-mode edits drop subtitle, attachment and data streams unless listed in 'keep' (not only when redacting); every drop is listed in the dry-run plan",
+      "task_ref": "t10",
+      "reason": "A cut would leave copied subtitle/attachment/data streams mistimed; c56 implied they ride along. Re-timing subtitles is out of scope. User approved 2026-10-01.",
+      "affects": [
+        "c56",
+        "c41"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 4
+    },
+    {
+      "id": "d5",
+      "what": "Reopen t19's daemon/server.py for a small fix: job completion must not clobber an output path that appeared after planning; use output.commit's no-clobber semantics (link then unlink; replace only with overwrite) plus a regression test",
+      "task_ref": "t19",
+      "reason": "Found by t10: server.py finishes ffmpeg jobs with os.replace(tmp_output, output), which overwrites a dst created after the dry-run even without --overwrite, breaking c43 and obligation o5. User approved the fix 2026-10-01.",
+      "affects": [
+        "c43",
+        "h35",
+        "t22"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "needs-follow-up",
+      "seq": 5
+    },
+    {
+      "id": "d6",
+      "what": "build_index defaults verify=True: one GET /capabilities per build re-indexes when the served model changed; query-time reads (load_index/search) make zero gateway calls. o11's 'zero requests' is read as the query path",
+      "task_ref": "t15",
+      "reason": "o11/c48 promise both zero requests on an unchanged file and re-indexing on a model change; detecting a model change needs one capabilities call, so a verify-off default would serve stale captions after a model swap. User chose verify-on-build 2026-10-01.",
+      "affects": [
+        "c48",
+        "h39",
+        "h19",
+        "t16"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 6
+    },
+    {
+      "id": "d7",
+      "what": "An output path whose extension does not match the source container is refused at dry-run (input.output_container_mismatch, naming the expected extension); fix lands in output.py (t7's file) via a small fix task",
+      "task_ref": "t7",
+      "reason": "Found by t13: following c56 an mkv source written to out.mp4 silently produced Matroska content under a .mp4 name. User chose refuse-at-dry-run 2026-10-01.",
+      "affects": [
+        "c56",
+        "c43",
+        "t22"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "needs-follow-up",
+      "seq": 7
+    },
+    {
+      "id": "d8",
+      "what": "Blur rectangles are widened outward to even (4:2:0) edges - at most 1px per edge, clamped to the frame - and the actual covered area is reported; black boxes stay pixel-exact",
+      "task_ref": "t12",
+      "reason": "ffmpeg overlay rounds x/y down to even on 4:2:0, so an odd-edged blur would shift and leave an unblurred column (a leak). Fail closed: never cover less than asked. User approved 2026-10-01.",
+      "affects": [
+        "c12",
+        "h9"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 8
+    },
+    {
+      "id": "d9",
+      "what": "Redaction time windows start one nominal frame interval (+1ms) early and end 1ms late so every frame on screen during [start,end] is covered; VFR gaps longer than the nominal interval remain a documented caveat",
+      "task_ref": "t12",
+      "reason": "Exact between(t,start,end) leaves the frame presented at 'start' (shown slightly earlier) uncovered; matches probe's frame-presented-at-t rule. build() is pure so it cannot probe actual VFR frame times. User approved 2026-10-01.",
+      "affects": [
+        "c12",
+        "h9",
+        "c42"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 9
+    }
+  ],
+  "evidence": [],
+  "deltas": [],
+  "supersessions": []
+}

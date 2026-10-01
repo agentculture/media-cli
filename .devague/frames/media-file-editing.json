@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-30T19:12:03Z",
-  "updated": "2026-09-30T19:34:37Z",
+  "updated": "2026-10-01T05:35:28Z",
   "claims": [
     {
       "id": "c1",
@@ -1371,6 +1371,77 @@
       ],
       "origin": "llm",
       "status": "approved"
+    },
+    {
+      "id": "l3",
+      "code": "control-absent",
+      "what": "t1 (ffmpeg tool layer): tests were written first but never run red before the implementation existed, so the TDD red phase that proves the tests can fail was skipped; the -filters/-encoders parser was validated against ffmpeg 6.1.1 only",
+      "skipped_check": "run tests/test_media_tools.py against a stub _tools.py and observe failures before implementing",
+      "refs": [
+        "t1"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l4",
+      "code": "control-absent",
+      "what": "t19 (daemon server): real cross-uid rejection verified only by overriding expected_uid (no second user available); SIGKILL escalation after the grace period is untested because ffmpeg always exited on SIGTERM; queued/running records orphaned by a daemon crash are not resumed",
+      "skipped_check": "a real second-uid connection test and a SIGTERM-ignoring child to exercise SIGKILL escalation",
+      "refs": [
+        "t19",
+        "o13",
+        "o14"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l5",
+      "code": "grader-unverified",
+      "what": "t7 (output writer): an intermediate commit was made with a broken test import (21 tests failing) before the suite was re-run; caught by flake8 and amended before hand-back",
+      "skipped_check": "run the test suite before committing",
+      "refs": [
+        "t7"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l6",
+      "code": "control-absent",
+      "what": "t20 (daemon client): spawn-failure paths (spawned daemon exiting non-zero, 10s spawn timeout) are untested; o15 is tested only against the CLI verbs that exist so far (probe/frames/status/result/cancel verbs land in t21-t23); the idle-exit backlog race was not reproduced; a reset-after-accept retry can double-submit; latency measured on this host only",
+      "skipped_check": "fault-injection tests for spawn failure/timeout and re-running o15 once the new verbs exist",
+      "refs": [
+        "t20",
+        "o15"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l7",
+      "code": "provenance-missing",
+      "what": "Main agent merged t9 a few seconds before deviation d2 was successfully recorded: the deviate call failed (invalid --affects id) inside a chained command that did not stop on that failure, so the merge ran first",
+      "skipped_check": "gate the merge on the deviate command's exit status",
+      "refs": [
+        "t9",
+        "d2"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l8",
+      "code": "grader-unverified",
+      "what": "d5 fix: lint-then-commit chained with ';' instead of '&&', so two commits landed while flake8 still reported E501 (fixed by follow-up wrap commits; final state green)",
+      "skipped_check": "gate commit on lint exit status",
+      "refs": [
+        "d5",
+        "t19"
+      ],
+      "origin": "llm",
+      "status": "proposed"
     }
   ],
   "obligations": []

@@ -5,7 +5,7 @@
   "schema_version": 5,
   "status": "exported",
   "created": "2026-09-30T19:35:00Z",
-  "updated": "2026-09-30T19:39:48Z",
+  "updated": "2026-09-30T19:45:54Z",
   "targets": [
     {
       "id": "c1",
@@ -1146,7 +1146,7 @@
     },
     {
       "id": "r2",
-      "text": "The lobes /capabilities payload shape and the image wire contract are unwritten (lobes#278, frame v1). t6's local-vs-proxied check is written against a recorded sample and may need adjusting against the live gateway",
+      "text": "The lobes image wire contract is still unwritten (lobes#278). t6 recorded a REAL /capabilities payload on this host (2026-09-30): senses and stt are loaded locally, while cortex, worker and hand are proxied to peers (proxied/hosted_by/member). The local check fails closed on that shape. The suffixed-lane samples are still synthesized from lobes#284, so a future gateway change may start refusing, but it cannot leak",
       "kind": "unknown_nonblocking",
       "task_id": "t6",
       "resolved": false,
