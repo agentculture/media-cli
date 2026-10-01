@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from media_cli.media.daemon import handlers  # noqa: F401  (registers the "index" job kind)
 from media_cli.media.daemon import server
 from media_cli.media.daemon.jobs import JobStore
 
