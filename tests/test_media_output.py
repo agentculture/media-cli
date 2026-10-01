@@ -272,6 +272,7 @@ def test_mismatch_checked_before_fallback_and_exists(media_mp4, tmp_path):
     assert e.value.kind == out.INPUT_OUTPUT_CONTAINER_MISMATCH
 
 
+@pytest.mark.requires_ffmpeg
 def test_m4a_accepted_for_mp4_family_source(tmp_path):
     info = _fake(tmp_path / "t.m4a", "mov,mp4,m4a,3gp,3g2,mj2", ("audio", "aac", False))
     plan = out.plan_output(tmp_path / "t.m4a", tmp_path / "o.m4a", {0}, info=info)

@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+import math
+
 from media_cli.media import editlist as E
 from media_cli.media.ops import FilterNode, Node, SegmentContext, not_implemented
 
@@ -26,7 +28,7 @@ ATEMPO_MAX = 2.0
 
 def _tempos(factor: float) -> list[float]:
     """Split ``factor`` into equal atempo instances, each within 0.5-2.0."""
-    if factor == 1.0:
+    if math.isclose(factor, 1.0):
         return [1.0]
     n = 1
     while not ATEMPO_MIN <= factor ** (1.0 / n) <= ATEMPO_MAX:
