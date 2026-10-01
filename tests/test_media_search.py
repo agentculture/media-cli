@@ -275,6 +275,91 @@ def test_all_modality_combines_sorted(cache, media_mp4):
         g.close()
 
 
+def _speech(g, media, cache, **kw):
+    return search.query(media, "red", modality="speech", client=g.client(), cache_dir=cache, **kw)
+
+
+def test_purge_transcripts_by_fingerprint_and_source(cache, tmp_path, media_mp4):
+    import shutil
+
+    other = tmp_path / "other.mp4"
+    shutil.copy(media_mp4, other)
+    g = Gateway(transcripts=["a red square", "a red square", "a red square"])
+    try:
+        _speech(g, str(media_mp4), cache)
+        _speech(g, str(other), cache)
+        assert len(search.cache_report(cache_dir=cache)["transcripts"]) == 2
+        assert search.purge_transcripts(str(media_mp4), cache_dir=cache) == 1
+        rep = search.cache_report(cache_dir=cache)["transcripts"]
+        assert [os.path.realpath(t["source"]) for t in rep] == [os.path.realpath(other)]
+        # file changes: fingerprint differs, recorded source still matches
+        _speech(g, str(media_mp4), cache)
+        with open(media_mp4, "rb") as fh:
+            data = fh.read()
+        mutated = tmp_path / "m.mp4"
+        mutated.write_bytes(data)
+        _speech(g, str(mutated), cache)
+        with open(mutated, "ab") as fh:
+            fh.write(b"x")
+        assert search.purge_transcripts(str(mutated), cache_dir=cache) == 1
+    finally:
+        g.close()
+
+
+def test_purge_returns_both_counts(gw, cache, media_mp4):
+    g = Gateway(transcripts=["a red square"])
+    try:
+        built(g, media_mp4, cache)
+        _speech(g, str(media_mp4), cache)
+        assert search.purge(str(media_mp4), cache_dir=cache) == {"indexes": 1, "transcripts": 1}
+        assert search.purge(str(media_mp4), cache_dir=cache) == {"indexes": 0, "transcripts": 0}
+    finally:
+        g.close()
+
+
+def test_transcript_cache_is_lru_bounded_and_keeps_newest(cache, tmp_path, media_mp4):
+    import shutil
+
+    g = Gateway(transcripts=["a red square one", "a red square two", "a red square three"])
+    try:
+        files = []
+        for n in range(3):
+            f = tmp_path / f"c{n}.mp4"
+            shutil.copy(media_mp4, f)
+            with open(f, "ab") as fh:
+                fh.write(bytes([n]) * 10)
+            files.append(str(f))
+        _speech(g, files[0], cache, max_transcript_bytes=10**6)
+        first = search.cache_report(cache_dir=cache)["transcripts"][0]["file"]
+        os.utime(first, (1, 1))  # oldest
+        _speech(g, files[1], cache, max_transcript_bytes=1)  # cap tiny: evicts old, keeps new
+        rep = search.cache_report(cache_dir=cache)["transcripts"]
+        assert len(rep) == 1 and not os.path.exists(first)
+        assert os.path.realpath(rep[0]["source"]) == os.path.realpath(files[1])
+    finally:
+        g.close()
+
+
+def test_cache_report_lists_indexes_and_transcripts(cache, media_mp4):
+    g = Gateway(transcripts=["a red square"])
+    try:
+        built(g, media_mp4, cache)
+        _speech(g, str(media_mp4), cache)
+        rep = search.cache_report(str(media_mp4), cache_dir=cache)
+        assert len(rep["indexes"]) == 1 and len(rep["transcripts"]) == 1
+        i, t = rep["indexes"][0], rep["transcripts"][0]
+        assert i["entries"] == 10 and i["bytes"] > 0 and i["fingerprint"] == t["fingerprint"]
+        assert os.path.realpath(i["source"]) == os.path.realpath(media_mp4)
+        assert t["segments"] == 1
+        assert rep["total_bytes"] == i["bytes"] + t["bytes"]
+        assert search.cache_report("/nonexistent-x", cache_dir=cache)["indexes"] == []
+        assert search.cache_report(cache_dir=str(cache) + "-none") == {
+            "indexes": [], "transcripts": [], "total_bytes": 0
+        }  # fmt: skip
+    finally:
+        g.close()
+
+
 @pytest.mark.live_gateway
 def test_live_finds_red_square_range(media_red_square, tmp_path):
     cache = str(tmp_path / "cache")

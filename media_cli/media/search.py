@@ -3,7 +3,8 @@
 Public API
 ----------
 ``query(path, text, *, modality="frames", index_params=None, client=None, batch_size=8,
-threshold=0.5, build_if_missing=False, role="senses", language="en", cache_dir=None)
+threshold=0.5, build_if_missing=False, role="senses", language="en", cache_dir=None,
+max_transcript_bytes=64 MiB)
 -> list[hit]``
 
 ``modality`` is ``frames`` (cached frame captions), ``speech`` (chunked transcript) or
@@ -41,12 +42,18 @@ No index and ``build_if_missing=False`` is ``input.index_missing`` (the CLI subm
 build as a daemon job).  ``build_if_missing=True`` calls ``build_index`` (verify=False, so the
 query path stays free of the d6 verification call).
 
-Transcript cache: ``<cache root>/.transcripts/<fingerprint16>-<language>.json`` (dot-prefixed
-so ``index`` eviction and ``purge`` ignore it; it is not size-bounded or purged by them).
+Transcript cache: ``<cache root>/.transcripts/<fingerprint16>-<language>.json`` holding
+``{schema_version, source (realpath), fingerprint, segments}``.  The directory is dot-prefixed
+so ``index`` eviction and ``purge`` ignore it; this module owns its lifecycle instead:
+LRU-bounded to ``max_transcript_bytes`` (default 64 MiB, never evicting the file just
+written; reads touch the mtime), ``purge_transcripts`` (by current fingerprint and by
+recorded source), ``purge`` (index + transcripts; what the CLI calls) and ``cache_report``
+(inspect index dirs and transcripts).
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -61,6 +68,7 @@ INPUT_BAD_QUERY = "input.bad_query"
 MODALITIES = ("frames", "speech", "all")
 DEFAULT_THRESHOLD = 0.5
 TRANSCRIPTS_DIR = ".transcripts"
+DEFAULT_MAX_TRANSCRIPT_BYTES = 64 * 1024**2
 _JSON_FORMAT = {"type": "json_object"}
 
 _PROMPT = (
@@ -191,15 +199,44 @@ def _query_frames(path, text, params, client, role, batch_size, threshold, build
     return hits
 
 
-def _transcript(path, client, language, cache_dir) -> tuple[list[dict], str]:
-    root = os.path.join(cache_dir or index.default_cache_dir(), TRANSCRIPTS_DIR)
-    fp = hashlib.sha256(json.dumps(index.fingerprint(path), sort_keys=True).encode()).hexdigest()
-    file = os.path.join(root, f"{fp[:16]}-{language}.json")
+def _fp16(path) -> str:
+    fp = index.fingerprint(path)
+    return hashlib.sha256(json.dumps(fp, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def _tdir(cache_dir) -> str:
+    return os.path.join(cache_dir or index.default_cache_dir(), TRANSCRIPTS_DIR)
+
+
+def _evict_transcripts(root: str, max_bytes: int, keep: str) -> None:
+    items = []
+    for name in os.listdir(root):
+        f = os.path.join(root, name)
+        with contextlib.suppress(OSError):
+            st = os.stat(f)
+            items.append((st.st_mtime, f, st.st_size))
+    total = sum(i[2] for i in items)
+    for _stamp, f, size in sorted(items):
+        if total <= max_bytes:
+            break
+        if os.path.abspath(f) == os.path.abspath(keep):
+            continue
+        with contextlib.suppress(OSError):
+            os.remove(f)
+            total -= size
+
+
+def _transcript(path, client, language, cache_dir, max_bytes) -> tuple[list[dict], str]:
+    root = _tdir(cache_dir)
+    fp = index.fingerprint(path)
+    file = os.path.join(root, f"{_fp16(path)}-{language}.json")
     try:
         with open(file, encoding="utf-8") as fh:
-            segs = json.load(fh)
-        if isinstance(segs, list):
-            return segs, file
+            doc = json.load(fh)
+        if isinstance(doc, dict) and isinstance(doc.get("segments"), list):
+            with contextlib.suppress(OSError):
+                os.utime(file)  # LRU access stamp
+            return doc["segments"], file
     except (OSError, ValueError):
         pass
     info = probe.probe(path)
@@ -212,15 +249,132 @@ def _transcript(path, client, language, cache_dir) -> tuple[list[dict], str]:
     )
     os.makedirs(root, mode=0o700, exist_ok=True)
     os.chmod(root, 0o700)
+    doc = {
+        "schema_version": 1,
+        "source": os.path.realpath(os.fspath(path)),
+        "fingerprint": fp,
+        "segments": segs,
+    }
     tmp = f"{file}.{os.getpid()}.tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(segs, fh)
+        json.dump(doc, fh)
     os.replace(tmp, file)
+    _evict_transcripts(root, max_bytes, file)
     return segs, file
 
 
-def _query_speech(path, text, client, role, batch_size, threshold, language, cache_dir):
-    segs, file = _transcript(path, client, language, cache_dir)
+def _transcript_files(cache_dir):
+    root = _tdir(cache_dir)
+    if not os.path.isdir(root):
+        return
+    for name in sorted(os.listdir(root)):
+        if name.endswith(".json"):
+            f = os.path.join(root, name)
+            try:
+                with open(f, encoding="utf-8") as fh:
+                    doc = json.load(fh)
+            except (OSError, ValueError):
+                doc = {}
+            yield name, f, doc if isinstance(doc, dict) else {}
+
+
+def _matches(name: str, doc: dict, real: str, fp16: str | None) -> bool:
+    return (fp16 is not None and name.startswith(fp16 + "-")) or doc.get("source") == real
+
+
+def purge_transcripts(path: str | os.PathLike, *, cache_dir: str | None = None) -> int:
+    """Delete every cached transcript of *path*; returns the number removed.
+
+    Matches the file's current fingerprint and any transcript whose recorded source is the
+    same realpath (left behind when the file changed).
+    """
+    real = os.path.realpath(os.fspath(path))
+    fp16 = None
+    with contextlib.suppress(MediaInputError):
+        fp16 = _fp16(path)
+    removed = 0
+    for name, f, doc in list(_transcript_files(cache_dir)):
+        if _matches(name, doc, real, fp16):
+            with contextlib.suppress(OSError):
+                os.remove(f)
+                removed += 1
+    return removed
+
+
+def purge(path: str | os.PathLike, *, cache_dir: str | None = None) -> dict[str, int]:
+    """Purge every cached artifact of *path*: ``{"indexes": n, "transcripts": m}``."""
+    return {
+        "indexes": index.purge(path, cache_dir=cache_dir),
+        "transcripts": purge_transcripts(path, cache_dir=cache_dir),
+    }
+
+
+def _size(directory: str) -> int:
+    total = 0
+    for dp, _dn, fn in os.walk(directory):
+        for name in fn:
+            with contextlib.suppress(OSError):
+                total += os.lstat(os.path.join(dp, name)).st_size
+    return total
+
+
+def cache_report(
+    path: str | os.PathLike | None = None, *, cache_dir: str | None = None
+) -> dict[str, Any]:
+    """List cached index dirs and transcripts (all, or only those of *path*); read-only."""
+    root = cache_dir or index.default_cache_dir()
+    real = os.path.realpath(os.fspath(path)) if path is not None else None
+    fp16 = None
+    if path is not None:
+        with contextlib.suppress(MediaInputError):
+            fp16 = _fp16(path)
+    indexes = []
+    if os.path.isdir(root):
+        for name in sorted(os.listdir(root)):
+            d = os.path.join(root, name)
+            if not os.path.isdir(d) or name.startswith("."):
+                continue
+            try:
+                with open(os.path.join(d, index.INDEX_FILE), encoding="utf-8") as fh:
+                    doc = json.load(fh)
+            except (OSError, ValueError):
+                doc = {}
+            doc = doc if isinstance(doc, dict) else {}
+            if real is not None and not _matches(name, doc, real, fp16):
+                continue
+            indexes.append(
+                {
+                    "dir": d,
+                    "bytes": _size(d),
+                    "source": doc.get("source"),
+                    "fingerprint": name.split("-")[0],
+                    "identity": doc.get("identity"),
+                    "entries": len(doc.get("entries", [])),
+                }
+            )
+    transcripts = []
+    for name, f, doc in _transcript_files(cache_dir):
+        if real is not None and not _matches(name, doc, real, fp16):
+            continue
+        with contextlib.suppress(OSError):
+            transcripts.append(
+                {
+                    "file": f,
+                    "bytes": os.stat(f).st_size,
+                    "source": doc.get("source"),
+                    "fingerprint": name.split("-")[0],
+                    "segments": len(doc.get("segments", [])),
+                }
+            )
+    return {
+        "indexes": indexes,
+        "transcripts": transcripts,
+        "total_bytes": sum(i["bytes"] for i in indexes) + sum(t["bytes"] for t in transcripts),
+    }
+
+
+def _query_speech(path, text, client, role, batch_size, threshold, language, cache_dir, max_bytes):
+    segs, file = _transcript(path, client, language, cache_dir, max_bytes)
     if not segs:
         return []
     verdicts = _judge(
@@ -270,6 +424,7 @@ def query(
     role: str = "senses",
     language: str = "en",
     cache_dir: str | None = None,
+    max_transcript_bytes: int = DEFAULT_MAX_TRANSCRIPT_BYTES,
 ) -> list[dict[str, Any]]:
     """Find where *text* occurs in *path*; see the module docstring for the hit schema."""
     if not text or not text.strip():
@@ -290,5 +445,15 @@ def query(
             src, text, params, client, role, batch_size, threshold, build_if_missing, cache_dir
         )
     if modality in ("speech", "all"):
-        hits += _query_speech(src, text, client, role, batch_size, threshold, language, cache_dir)
+        hits += _query_speech(
+            src,
+            text,
+            client,
+            role,
+            batch_size,
+            threshold,
+            language,
+            cache_dir,
+            max_transcript_bytes,
+        )
     return sorted(hits, key=lambda h: (h["start"], h["end"]))
