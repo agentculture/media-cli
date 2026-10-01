@@ -23,8 +23,9 @@ SENSES_CAPS = {
 
 
 class Gateway:
-    def __init__(self, model="model-a", chat_body=None):
+    def __init__(self, model="model-a", chat_body=None, script=None):
         self.model = model
+        self.script = script  # fn(post_number, image_count) -> content string or None
         self.chat_body = chat_body  # override raw chat content string
         self.log: list[tuple[str, str]] = []
         gw = self
@@ -54,6 +55,8 @@ class Gateway:
                 parts = body["messages"][0]["content"]
                 count = sum(1 for p in parts if p["type"] == "image_url")
                 content = gw.chat_body
+                if gw.script is not None:
+                    content = gw.script(len(gw.posts), count)
                 if content is None:
                     content = json.dumps({"captions": [f"caption {i}" for i in range(count)]})
                 self._send({"choices": [{"message": {"content": content}}]})
@@ -194,7 +197,7 @@ def test_requires_exactly_one_sampler(gw, cache, media_mp4):
 
 
 def test_malformed_caption_response_caches_nothing(cache, media_mp4):
-    for body in ("not json", json.dumps({"captions": ["only one"]})):
+    for body in ("not json", json.dumps({"captions": ["one", "two", "three"]})):
         g = Gateway(chat_body=body)
         try:
             with pytest.raises((MediaEnvError, MediaInputError)):
@@ -261,3 +264,66 @@ def test_default_cache_dir_uses_xdg(monkeypatch, tmp_path):
     monkeypatch.delenv("XDG_CACHE_HOME")
     monkeypatch.setenv("HOME", str(tmp_path))
     assert index.default_cache_dir() == str(tmp_path / ".cache" / "media-cli" / "index")
+
+
+# -- d13: malformed batch replies retry, then fall back frame by frame -----------
+
+
+def _caps(n):
+    return json.dumps({"captions": [f"c{i}" for i in range(n)]})
+
+
+def _scripted(script):
+    g = Gateway(script=script)
+    return g
+
+
+def test_count_mismatch_retries_batch_once(cache, media_mp4):
+    # post 1 is short by one caption; its retry (post 2) is right; the rest are right
+    g = _scripted(lambda post, n: _caps(n - 1) if post == 1 else _caps(n))
+    try:
+        idx = build(g, media_mp4, cache)
+        assert len(idx["entries"]) == 5
+        assert len(g.posts) == 4  # 3 planned batches + 1 retry
+    finally:
+        g.close()
+
+
+def test_two_mismatches_fall_back_to_per_frame(cache, media_mp4):
+    g = _scripted(lambda post, n: _caps(n - 1) if post in (1, 2) else _caps(n))
+    try:
+        idx = build(g, media_mp4, cache)
+        assert len(idx["entries"]) == 5
+        # post 1 + retry + 2 single frames, then the 2 remaining batches
+        assert len(g.posts) == 6
+    finally:
+        g.close()
+
+
+def test_single_frame_stays_malformed_fails_closed(cache, media_mp4):
+    g = _scripted(
+        lambda post, n: json.dumps({"captions": [None]}) if n == 1 or post <= 2 else _caps(n)
+    )
+    try:
+        with pytest.raises(MediaEnvError) as ei:
+            build(g, media_mp4, cache)
+        assert ei.value.kind == "env.sense_unavailable"
+        assert ei.value.remediation
+        assert len(g.posts) == 3  # batch, retry, first single frame -> stop
+    finally:
+        g.close()
+    assert not os.path.exists(cache) or os.listdir(cache) == []
+
+
+def test_fallback_over_max_calls_budget_exceeded_before_sending(cache, media_mp4):
+    # 3 planned batches, cap 4: one retry fits (1+1+2 reserved), a 2-frame fallback does not
+    g = _scripted(lambda post, n: _caps(n - 1))
+    try:
+        with pytest.raises(MediaInputError) as ei:
+            build(g, media_mp4, cache, max_calls=4)
+        assert ei.value.kind == "input.budget_exceeded"
+        assert ei.value.remediation
+        assert len(g.posts) == 2  # batch + retry; the fallback was never sent
+    finally:
+        g.close()
+    assert not os.path.exists(cache) or os.listdir(cache) == []

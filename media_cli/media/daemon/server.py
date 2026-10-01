@@ -106,6 +106,7 @@ INPUT_UNKNOWN_OP = "input.unknown_op"
 INPUT_UNKNOWN_JOB_KIND = "input.unknown_job_kind"
 INPUT_JOB_ILLEGAL_TRANSITION = "input.job_illegal_transition"
 ENV_DAEMON_SETUP = "env.daemon_setup"
+ENV_SOCKET_PATH_TOO_LONG = "env.socket_path_too_long"
 ENV_DAEMON_STOPPING = "env.daemon_stopping"
 ENV_DAEMON_INTERNAL = "env.daemon_internal"
 ENV_JOB_FAILED = "env.job_failed"
@@ -124,6 +125,23 @@ class DaemonSetupError(MediaEnvError):
 
     def __init__(self, message: str, remediation: str = "") -> None:
         super().__init__(ENV_DAEMON_SETUP, message, remediation)
+
+
+def check_socket_path(path: Path | str) -> None:
+    """Raise ``env.socket_path_too_long`` if *path* cannot be an AF_UNIX address.
+
+    Linux allows :data:`_SUN_PATH_MAX` usable bytes in ``sun_path``; longer paths fail
+    deep in ``bind``/``connect`` with an opaque ``OSError``.  Check up front instead.
+    """
+    length = len(os.fsencode(str(path)))
+    if length > _SUN_PATH_MAX:
+        raise MediaEnvError(
+            ENV_SOCKET_PATH_TOO_LONG,
+            f"daemon socket path {path} is {length} bytes; the unix-socket limit is "
+            f"{_SUN_PATH_MAX}",
+            f"set a shorter XDG_RUNTIME_DIR (e.g. /run/user/{os.getuid()}); the socket "
+            "lives in $XDG_RUNTIME_DIR/media-cli/daemon.sock",
+        )
 
 
 class JobFailed(Exception):
@@ -442,12 +460,8 @@ class Daemon:
 
     def run(self) -> int:
         """Acquire the lock, serve until stopped, clean up. Returns 0."""
+        check_socket_path(self.socket_path)
         ensure_sockdir(self.sockdir)
-        if len(os.fsencode(str(self.socket_path))) > _SUN_PATH_MAX:
-            raise DaemonSetupError(
-                f"socket path {self.socket_path} is too long for a unix socket",
-                "use a shorter socket directory",
-            )
         lock_fd = self._acquire_lock()
         listener = None
         workers: list[threading.Thread] = []
@@ -595,6 +609,7 @@ class Daemon:
                     err = _error(
                         INPUT_REQUEST_TOO_LARGE,
                         f"request exceeds {MAX_REQUEST_BYTES} bytes",
+                        "send a smaller request (job specs are limited to 1 MiB)",
                     )
                     conn.sendall(_encode(err))
                     self._drain(conn, rfile)
@@ -628,9 +643,11 @@ class Daemon:
         try:
             req = json.loads(line)
         except (ValueError, UnicodeDecodeError) as exc:
-            return _error(INPUT_BAD_REQUEST, f"malformed JSON: {exc}")
+            return _error(INPUT_BAD_REQUEST, f"malformed JSON: {exc}", _REQ_HINT)
         if not isinstance(req, dict) or not isinstance(req.get("op"), str):
-            return _error(INPUT_BAD_REQUEST, "request must be an object with a string 'op'")
+            return _error(
+                INPUT_BAD_REQUEST, "request must be an object with a string 'op'", _REQ_HINT
+            )
         op = req["op"]
         ops = {
             "ping": self._op_ping,
@@ -641,13 +658,22 @@ class Daemon:
         }
         fn = ops.get(op)
         if fn is None:
-            return _error(INPUT_UNKNOWN_OP, f"unknown op {op!r}; known: {sorted(ops)}")
+            return _error(
+                INPUT_UNKNOWN_OP,
+                f"unknown op {op!r}; known: {sorted(ops)}",
+                "use one of the listed ops",
+            )
         try:
             return fn(req)
         except (MediaInputError, MediaEnvError) as exc:
-            return _error(exc.kind, exc.message)
+            return _error(exc.kind, exc.message, exc.remediation)
         except Exception as exc:  # never kill the connection thread silently
-            return _error(ENV_DAEMON_INTERNAL, f"{type(exc).__name__}: {exc}")
+            return _error(
+                ENV_DAEMON_INTERNAL,
+                f"{type(exc).__name__}: {exc}",
+                "this is a daemon bug; see daemon.log next to the jobs directory "
+                "(`media job list`)",
+            )
 
     def _op_ping(self, req: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "pid": os.getpid()}
@@ -656,14 +682,20 @@ class Daemon:
     def _job_id(req: dict[str, Any]) -> str:
         job_id = req.get("job_id")
         if not isinstance(job_id, str) or not job_id:
-            raise MediaInputError(INPUT_BAD_REQUEST, "'job_id' must be a non-empty string")
+            raise MediaInputError(
+                INPUT_BAD_REQUEST, "'job_id' must be a non-empty string", "pass a job id"
+            )
         return job_id
 
     def _op_submit(self, req: dict[str, Any]) -> dict[str, Any]:
         kind, argv, output, meta, spec = _validate_job(req.get("job"))
         with self._cv:
             if self._stop.is_set() or not self._accepting:
-                raise MediaEnvError(ENV_DAEMON_STOPPING, "the daemon is shutting down")
+                raise MediaEnvError(
+                    ENV_DAEMON_STOPPING,
+                    "the daemon is shutting down",
+                    "retry the submit; a fresh daemon starts on demand",
+                )
             rec = self.store.create(kind, argv, output=output, meta={**meta, "spec": spec})
             self._queue.append(rec.id)
             self._touch()
@@ -793,45 +825,58 @@ def _encode(obj: dict[str, Any]) -> bytes:
     return json.dumps(obj, separators=(",", ":")).encode("utf-8") + b"\n"
 
 
-def _error(kind: str, message: str) -> dict[str, Any]:
-    return {"ok": False, "error": {"kind": kind, "message": message}}
+_REQ_HINT = 'send one JSON object per line, e.g. {"op": "ping"}'
+_JOB_HINT = "fix the job spec (see the daemon module docstring for the job fields)"
+
+
+def _error(kind: str, message: str, remediation: str = "") -> dict[str, Any]:
+    err = {"kind": kind, "message": message, "remediation": remediation}
+    return {"ok": False, "error": err}
 
 
 def _str_list(value: Any, name: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
-        raise MediaInputError(INPUT_BAD_REQUEST, f"'{name}' must be a list of strings")
+        raise MediaInputError(
+            INPUT_BAD_REQUEST, f"'{name}' must be a list of strings", f"fix '{name}' in the job"
+        )
     return list(value)
 
 
 def _opt_str(value: Any, name: str) -> str | None:
     if value is not None and not isinstance(value, str):
-        raise MediaInputError(INPUT_BAD_REQUEST, f"'{name}' must be a string")
+        raise MediaInputError(
+            INPUT_BAD_REQUEST, f"'{name}' must be a string", f"fix '{name}' in the job"
+        )
     return value
 
 
 def _validate_job(job: Any) -> tuple[str, list[str], str | None, dict, dict]:
     if not isinstance(job, dict):
-        raise MediaInputError(INPUT_BAD_REQUEST, "'job' must be an object")
+        raise MediaInputError(INPUT_BAD_REQUEST, "'job' must be an object", _JOB_HINT)
     kind = job.get("kind")
     if not isinstance(kind, str) or (kind != "ffmpeg" and kind not in _HANDLERS):
         known = sorted({"ffmpeg", *_HANDLERS})
-        raise MediaInputError(INPUT_UNKNOWN_JOB_KIND, f"unknown job kind {kind!r}; known: {known}")
+        raise MediaInputError(
+            INPUT_UNKNOWN_JOB_KIND,
+            f"unknown job kind {kind!r}; known: {known}",
+            "use one of the known job kinds",
+        )
     argv = _str_list(job.get("argv", []), "argv")
     output = _opt_str(job.get("output"), "output")
     meta = job.get("meta", {})
     if not isinstance(meta, dict):
-        raise MediaInputError(INPUT_BAD_REQUEST, "'meta' must be an object")
+        raise MediaInputError(INPUT_BAD_REQUEST, "'meta' must be an object", _JOB_HINT)
     spec = {k: v for k, v in job.items() if k not in ("kind", "argv", "output", "meta")}
     if kind == "ffmpeg":
         _str_list(spec.get("args"), "args")
         _opt_str(spec.get("tmp_output"), "tmp_output")
         if not isinstance(spec.get("overwrite", False), bool):
-            raise MediaInputError(INPUT_BAD_REQUEST, "'overwrite' must be a boolean")
+            raise MediaInputError(INPUT_BAD_REQUEST, "'overwrite' must be a boolean", _JOB_HINT)
         duration = spec.get("duration")
         if duration is not None and (
             isinstance(duration, bool) or not isinstance(duration, (int, float))
         ):
-            raise MediaInputError(INPUT_BAD_REQUEST, "'duration' must be a number")
+            raise MediaInputError(INPUT_BAD_REQUEST, "'duration' must be a number", _JOB_HINT)
     return kind, argv, output, meta, spec
 
 
