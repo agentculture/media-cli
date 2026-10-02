@@ -642,7 +642,7 @@ class Daemon:
     def _handle_line(self, line: bytes) -> dict[str, Any]:
         try:
             req = json.loads(line)
-        except (ValueError, UnicodeDecodeError) as exc:
+        except ValueError as exc:  # includes UnicodeDecodeError
             return _error(INPUT_BAD_REQUEST, f"malformed JSON: {exc}", _REQ_HINT)
         if not isinstance(req, dict) or not isinstance(req.get("op"), str):
             return _error(

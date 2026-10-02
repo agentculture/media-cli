@@ -144,6 +144,14 @@ def _location(root: str, fp: dict[str, Any], identity: dict[str, Any]) -> tuple[
     return _digest(fp), os.path.join(root, f"{_digest(fp)}-{_digest(identity)}")
 
 
+def index_dir(root: str, fp: dict[str, Any], identity: dict[str, Any]) -> str:
+    """The cache directory holding the index for ``fp`` under ``identity``.
+
+    The single source of the on-disk layout for callers outside this module.
+    """
+    return _location(root, fp, identity)[1]
+
+
 def _private_dir(path: str) -> None:
     os.makedirs(path, mode=0o700, exist_ok=True)
     os.chmod(path, 0o700)
