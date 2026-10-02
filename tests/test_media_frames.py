@@ -55,7 +55,8 @@ def test_extract_times_names_and_shape(media_mp4, tmp_path):
     assert [set(r) for r in res] == [{"t", "frame_index", "path"}] * 2
     assert [r["frame_index"] for r in res] == [25, 62]
     for r in res:
-        assert Path(r["path"]).is_file() and _size(r["path"]) == (320, 240)
+        assert Path(r["path"]).is_file()
+        assert _size(r["path"]) == (320, 240)
         assert re.fullmatch(r"frame_t\d{6}\.\d{3}_f\d{5}\.png", Path(r["path"]).name)
     assert Path(res[0]["path"]).name == "frame_t000001.000_f00025.png"
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted(Path(r["path"]).name for r in res)
@@ -109,7 +110,8 @@ def test_every_and_count(media_mp4, tmp_path):
 def test_scene_mode_finds_red_square_edges(media_red_square, tmp_path):
     res = F.extract(media_red_square, scene=0.03, outdir=tmp_path)
     ts = [r["t"] for r in res]
-    assert any(abs(t - 4.0) < 0.1 for t in ts) and any(abs(t - 6.04) < 0.1 for t in ts), ts
+    assert any(abs(t - 4.0) < 0.1 for t in ts), ts
+    assert any(abs(t - 6.04) < 0.1 for t in ts), ts
     info = P.probe(media_red_square)
     for r in res:
         assert P.to_frame_index(info, r["t"]) == r["frame_index"]
@@ -119,7 +121,8 @@ def test_scene_mode_finds_red_square_edges(media_red_square, tmp_path):
 def test_scene_mode_offset_file_is_normalized(media_vfr_offset, tmp_path):
     info = P.probe(media_vfr_offset)
     res = F.extract(media_vfr_offset, scene=0.0, outdir=tmp_path, max_frames=1000)
-    assert res and res[0]["t"] < 1.0  # normalized, not raw (~1.5+)
+    assert res
+    assert res[0]["t"] < 1.0  # normalized, not raw (~1.5+)
     for r in res[:5]:
         assert P.to_frame_index(info, r["t"]) == r["frame_index"]
 
