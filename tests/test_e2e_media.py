@@ -16,6 +16,7 @@ import ast
 import hashlib
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -336,7 +337,10 @@ def _assert_machine_error(p, code):
 
 def test_distinct_machine_codes_for_corrupt_range_and_offframe(e2e, media_mp4):
     corrupt = e2e.work / "corrupt.mp4"
-    corrupt.write_bytes(os.urandom(4096))
+    # Seeded, not os.urandom: ~1% of random 4 KiB blobs are sniffed by ffprobe as a
+    # stream-less format (e.g. "lrc") and probe successfully, making this flaky.
+    rng = random.Random(0)
+    corrupt.write_bytes(bytes(rng.randrange(256) for _ in range(4096)))
     kinds = []
 
     p = media(e2e, "probe", str(corrupt), "--json")

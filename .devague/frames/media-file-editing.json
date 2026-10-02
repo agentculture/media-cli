@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-30T19:12:03Z",
-  "updated": "2026-10-01T07:23:21Z",
+  "updated": "2026-10-02T15:08:03Z",
   "claims": [
     {
       "id": "c1",
@@ -1509,6 +1509,28 @@
       "refs": [
         "c5",
         "h3"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l15",
+      "code": "control-absent",
+      "what": "sonar t-cli: subagent committed tests/test_e2e_media.py while that file's run showed failures (ungated commit; later confirmed green serially + full suite)",
+      "skipped_check": "commit gated on pytest exit status",
+      "refs": [
+        "sonar/t-cli"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l16",
+      "code": "control-absent",
+      "what": "sonar t-daemon: per-file test runs skipped (edits batched, tested together) and regex/ast rewrite diff not read by the subagent",
+      "skipped_check": "per-file test run; diff review",
+      "refs": [
+        "sonar/t-daemon"
       ],
       "origin": "llm",
       "status": "proposed"
