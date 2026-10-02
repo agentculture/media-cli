@@ -17,7 +17,8 @@ from tests.conftest import DURATION, FIXTURE_TITLE, VFR_START_OFFSET
 
 def test_probe_mp4_facts(media_mp4):
     info = P.probe(media_mp4)
-    assert info.video is not None and info.audio is not None
+    assert info.video is not None
+    assert info.audio is not None
     v = info.video
     assert (v.type, v.codec, v.width, v.height) == ("video", "h264", 320, 240)
     assert v.fps == pytest.approx(25.0)
@@ -42,7 +43,8 @@ def test_probe_extras_skips_attached_pic(media_with_extras):
     assert "subtitle" in types
     pics = [s for s in info.streams if s.attached_pic]
     assert len(pics) == 1
-    assert info.video is not None and not info.video.attached_pic
+    assert info.video is not None
+    assert not info.video.attached_pic
     assert info.video.index == 0
     assert info.tags.get("title") == FIXTURE_TITLE
 
