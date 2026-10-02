@@ -251,7 +251,8 @@ def test_default_sockdir_falls_back_to_cache_dir(tmp_path, monkeypatch):
     assert got == tmp_path / "cache" / "media-cli" / "run"
     assert not got.exists()
     server.ensure_sockdir(got)  # creates missing parents, leaf 0700
-    assert got.is_dir() and stat.S_IMODE(os.stat(got).st_mode) == 0o700
+    assert got.is_dir()
+    assert stat.S_IMODE(os.stat(got).st_mode) == 0o700
     assert os.stat(got).st_uid == os.getuid()
 
 
@@ -299,8 +300,9 @@ def test_kill_group_escalates_to_sigkill_when_sigterm_ignored():
 def test_refuses_loose_sockdir(sockdir, store):
     sockdir.mkdir(mode=0o755)
     os.chmod(sockdir, 0o755)
+    daemon = server.Daemon(sockdir, store=store, install_signals=False)
     with pytest.raises(server.DaemonSetupError):
-        server.Daemon(sockdir, store=store, install_signals=False).run()
+        daemon.run()
     assert not (sockdir / server.SOCKET_NAME).exists()
 
 
@@ -309,8 +311,9 @@ def test_refuses_symlinked_sockdir(sockdir, store, tmp_path):
     real.mkdir(mode=0o700)
     sockdir.parent.mkdir(exist_ok=True)
     os.symlink(real, sockdir)
+    daemon = server.Daemon(sockdir, store=store, install_signals=False)
     with pytest.raises(server.DaemonSetupError):
-        server.Daemon(sockdir, store=store, install_signals=False).run()
+        daemon.run()
 
 
 def test_serve_returns_2_on_bad_sockdir(sockdir, store):
@@ -416,15 +419,19 @@ def test_custom_handler_runs_and_bound_is_respected(run_daemon, monkeypatch):
     time.sleep(0.3)
     assert state["max"] == 2
     queued = [request(d.sock, {"op": "status", "job_id": i})["job"]["state"] for i in ids]
-    assert queued.count("running") == 2 and queued.count("queued") == 3
+    assert queued.count("running") == 2
+    assert queued.count("queued") == 3
     release.set()
     for i in ids:
         rec = wait_state(d.sock, i, {"done"})
         assert rec["output"].startswith("out-")
     assert state["max"] == 2
-    assert state["order"][:2] == [0, 1] and sorted(state["order"]) == [0, 1, 2, 3, 4]
+    assert state["order"][:2] == [0, 1]
+    assert sorted(state["order"]) == [0, 1, 2, 3, 4]
     res = request(d.sock, {"op": "result", "job_id": ids[0]})
-    assert res["ok"] and res["ready"] is True and res["output"] == "out-0"
+    assert res["ok"]
+    assert res["ready"] is True
+    assert res["output"] == "out-0"
 
 
 def test_custom_handler_failure_marks_failed(run_daemon, monkeypatch):
@@ -437,7 +444,8 @@ def test_custom_handler_failure_marks_failed(run_daemon, monkeypatch):
     rec = wait_state(d.sock, jid, {"failed"})
     assert "kaboom" in rec["error"]["message"]
     res = request(d.sock, {"op": "result", "job_id": jid})
-    assert res["ready"] is True and res["output"] is None
+    assert res["ready"] is True
+    assert res["output"] is None
 
 
 def test_register_handler_rejects_ffmpeg_override():
@@ -459,13 +467,15 @@ def test_cancel_queued_job_never_runs(run_daemon, monkeypatch):
     second = request(d.sock, {"op": "submit", "job": {"kind": "test.block"}})["job_id"]
     wait_for(lambda: ran == [first])
     resp = request(d.sock, {"op": "cancel", "job_id": second})
-    assert resp["ok"] and resp["job"]["state"] == "cancelled"
+    assert resp["ok"]
+    assert resp["job"]["state"] == "cancelled"
     release.set()
     wait_state(d.sock, first, {"done"})
     time.sleep(0.3)
     assert ran == [first]
     rec = request(d.sock, {"op": "status", "job_id": second})["job"]
-    assert rec["state"] == "cancelled" and rec["timings"]["started"] is None
+    assert rec["state"] == "cancelled"
+    assert rec["timings"]["started"] is None
 
 
 def test_cancel_terminal_job_is_error(run_daemon, monkeypatch):
@@ -474,7 +484,8 @@ def test_cancel_terminal_job_is_error(run_daemon, monkeypatch):
     jid = request(d.sock, {"op": "submit", "job": {"kind": "test.quick"}})["job_id"]
     wait_state(d.sock, jid, {"done"})
     resp = request(d.sock, {"op": "cancel", "job_id": jid})
-    assert resp["ok"] is False and resp["error"]["kind"] == "input.job_illegal_transition"
+    assert resp["ok"] is False
+    assert resp["error"]["kind"] == "input.job_illegal_transition"
 
 
 def test_idle_exit_waits_for_running_job(run_daemon, monkeypatch):
@@ -508,12 +519,14 @@ def test_ffmpeg_job_success_progress_and_atomic_replace(run_daemon, tmp_path):
     jid = request(d.sock, {"op": "submit", "job": job})["job_id"]
     rec = wait_state(d.sock, jid, {"done", "failed"})
     assert rec["state"] == "done", rec
-    assert out.exists() and out.stat().st_size > 0
+    assert out.exists()
+    assert out.stat().st_size > 0
     assert not tmp_out.exists()
     assert rec["progress"]["progress"] == "end"
     assert rec["progress"]["fraction"] == 1.0
     res = request(d.sock, {"op": "result", "job_id": jid})
-    assert res["ready"] and res["output"] == str(out)
+    assert res["ready"]
+    assert res["output"] == str(out)
     assert not pid_alive(rec["meta"]["pid"])
 
 
@@ -560,7 +573,8 @@ def test_ffmpeg_job_normal_publish_leaves_no_tmp(run_daemon, tmp_path):
     jid = request(d.sock, {"op": "submit", "job": job})["job_id"]
     rec = wait_state(d.sock, jid, {"done", "failed"})
     assert rec["state"] == "done", rec
-    assert out.stat().st_size > 0 and not tmp_out.exists()
+    assert out.stat().st_size > 0
+    assert not tmp_out.exists()
 
 
 def test_ffmpeg_job_overwrite_must_be_bool(run_daemon):
@@ -583,7 +597,8 @@ def test_ffmpeg_job_failure_marks_failed_and_removes_tmp(run_daemon, tmp_path):
     assert rec["state"] == "failed"
     assert "does-not-exist" in rec["error"]["stderr_tail"]
     assert Path(rec["error"]["log_path"]).exists()
-    assert not tmp_out.exists() and not out.exists()
+    assert not tmp_out.exists()
+    assert not out.exists()
 
 
 @needs_ffmpeg
@@ -598,7 +613,8 @@ def test_cancel_running_ffmpeg_kills_group(run_daemon, tmp_path):
     assert pid == pgid != os.getpgid(0)  # its own process group
     wait_for(lambda: request(d.sock, {"op": "status", "job_id": jid})["job"]["progress"])
     resp = request(d.sock, {"op": "cancel", "job_id": jid})
-    assert resp["ok"] and resp["job"]["state"] == "cancelled"
+    assert resp["ok"]
+    assert resp["job"]["state"] == "cancelled"
     assert not pid_alive(pid)
     assert group_members(pgid) == []
     assert not tmp_out.exists()
@@ -616,7 +632,8 @@ def test_ffmpeg_jobs_run_one_at_a_time_by_default(run_daemon):
     rec_b = wait_state(d.sock, b["job_id"], {"running"})
     pid_b, _ = wait_pid(d.sock, b["job_id"])
     request(d.sock, {"op": "cancel", "job_id": b["job_id"]})
-    assert rec_a["state"] == "running" and rec_b["state"] == "running"
+    assert rec_a["state"] == "running"
+    assert rec_b["state"] == "running"
     assert not pid_alive(pid_b)
 
 
@@ -633,7 +650,8 @@ def test_ten_concurrent_spawners_yield_one_daemon(sockdir, spawn_daemon):
     for p in losers:
         out, err = p.communicate(timeout=WAIT)
         assert p.returncode == 0, err
-        assert out == b"" and err == b""  # quiet
+        assert out == b""
+        assert err == b""
     sock = sockdir / server.SOCKET_NAME
     wait_for(sock.exists)
     assert request(sock, {"op": "ping"})["pid"] == alive[0].pid
@@ -647,8 +665,9 @@ def test_losing_spawner_returns_0(sockdir, store):
     fd = os.open(sockdir / server.LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        daemon = server.Daemon(sockdir, store=store, install_signals=False)
         with pytest.raises(server.DaemonAlreadyRunning):
-            server.Daemon(sockdir, store=store, install_signals=False).run()
+            daemon.run()
         assert server.serve(sockdir, store=store, install_signals=False) == 0
     finally:
         os.close(fd)
@@ -711,7 +730,8 @@ def test_server_has_no_mesh_imports_and_no_network_sockets():
     for mod in imported:
         assert not any(mod == b or mod.startswith(b + ".") for b in banned), mod
     assert "AF_INET" not in src
-    assert "culture.yaml" not in src and "AGENTS" not in src
+    assert "culture.yaml" not in src
+    assert "AGENTS" not in src
     # ffmpeg only via the _tools seam (o2): no direct subprocess/os.exec*/spawn calls.
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
@@ -746,8 +766,9 @@ def test_check_socket_path_limit_and_remediation(tmp_path):
 
 def test_daemon_run_rejects_long_socket_path_before_creating_anything(tmp_path, store):
     sd = tmp_path / ("x" * 120)
+    daemon = server.Daemon(sd, store=store, install_signals=False)
     with pytest.raises(server.MediaEnvError) as ei:
-        server.Daemon(sd, store=store, install_signals=False).run()
+        daemon.run()
     assert ei.value.kind == "env.socket_path_too_long"
     assert not sd.exists()
 

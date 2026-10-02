@@ -167,7 +167,8 @@ def test_xdg_runtime_dir_unset_falls_back_to_private_cache_dir(env, monkeypatch)
     job_id = c.submit(SHORT_JOB)
     assert job_id
     st = os.lstat(env.fallback_sockdir)
-    assert stat.S_ISDIR(st.st_mode) and stat.S_IMODE(st.st_mode) == 0o700
+    assert stat.S_ISDIR(st.st_mode)
+    assert stat.S_IMODE(st.st_mode) == 0o700
     assert stat.S_ISSOCK(os.lstat(env.fallback_sockdir / server.SOCKET_NAME).st_mode)
     assert not env.sockdir.exists()
     assert len(env.daemons()) == 1
@@ -183,7 +184,8 @@ def test_submit_with_no_daemon_spawns_one_and_returns_id_fast(env):
     job_id = c.submit(SHORT_JOB)
     elapsed = time.monotonic() - t0
     print(f"submit-with-spawn latency: {elapsed * 1000:.0f} ms")
-    assert isinstance(job_id, str) and job_id
+    assert isinstance(job_id, str)
+    assert job_id
     assert elapsed < 1.0, f"submit took {elapsed:.3f}s"
     assert len(env.daemons()) == 1
     assert c.ping() is True
@@ -204,7 +206,8 @@ def test_submitted_job_runs_to_done(env):
     assert rec["via"] == "daemon"
     assert rec["job"]["state"] == "done", rec
     res = c.result(job_id)
-    assert res["ready"] is True and res["via"] == "daemon"
+    assert res["ready"] is True
+    assert res["via"] == "daemon"
 
 
 def test_ten_concurrent_threaded_submits_one_daemon(env):
@@ -229,7 +232,8 @@ def test_ten_concurrent_threaded_submits_one_daemon(env):
     for t in threads:
         t.join(WAIT)
     assert errors == []
-    assert len(ids) == 10 and len(set(ids)) == 10
+    assert len(ids) == 10
+    assert len(set(ids)) == 10
     assert len(env.daemons()) == 1
 
 
@@ -257,7 +261,8 @@ def test_ten_concurrent_process_submits_one_daemon(env):
         assert p.returncode == 0, err
         assert err == ""
         ids.append(out.strip())
-    assert len(set(ids)) == 10 and all(ids)
+    assert len(set(ids)) == 10
+    assert all(ids)
     assert len(env.daemons()) == 1
 
 
@@ -304,8 +309,9 @@ def test_submit_spawn_failure_is_typed_env_error(env, monkeypatch):
     monkeypatch.setattr(client_mod, "SPAWN_TIMEOUT", 1.0)
     env.sockdir.mkdir(mode=0o700)
     os.chmod(env.sockdir, 0o755)
+    client = DaemonClient()
     with pytest.raises(MediaEnvError):
-        DaemonClient().submit(SHORT_JOB)
+        client.submit(SHORT_JOB)
     assert env.daemons() == []
 
 
@@ -324,12 +330,17 @@ def test_read_ops_with_no_daemon_use_store_and_never_spawn(env):
     c = DaemonClient()
     assert c.ping() is False
     st = c.status(rec.id)
-    assert st["via"] == "store" and st["job"]["id"] == rec.id and st["job"]["state"] == "queued"
+    assert st["via"] == "store"
+    assert st["job"]["id"] == rec.id
+    assert st["job"]["state"] == "queued"
     res = c.result(rec.id)
-    assert res["via"] == "store" and res["ready"] is False and res["output"] is None
+    assert res["via"] == "store"
+    assert res["ready"] is False
+    assert res["output"] is None
     assert [j["id"] for j in c.list_jobs()] == [rec.id]
     can = c.cancel(rec.id)
-    assert can["via"] == "store" and can["job"]["state"] == "cancelled"
+    assert can["via"] == "store"
+    assert can["job"]["state"] == "cancelled"
     assert store.get(rec.id).state == "cancelled"
     res = c.result(rec.id)
     assert res["ready"] is True
@@ -388,7 +399,8 @@ def test_ops_go_through_running_daemon(env):
     queued = c.submit(LONG_JOB)  # max_concurrent=1 -> stays queued
     assert c.status(queued)["via"] == "daemon"
     can = c.cancel(queued)
-    assert can["via"] == "daemon" and can["job"]["state"] == "cancelled"
+    assert can["via"] == "daemon"
+    assert can["job"]["state"] == "cancelled"
     can = c.cancel(first)
     assert can["job"]["state"] == "cancelled"
 
@@ -465,7 +477,8 @@ def test_job_survives_submitter_exit_and_is_polled_from_fresh_process(env):
     p = run_py(POLL_CODE, job_id)
     assert p.returncode == 0, p.stderr
     st = json.loads(p.stdout)
-    assert st["via"] == "store" and st["job"]["state"] == "done"
+    assert st["via"] == "store"
+    assert st["job"]["state"] == "done"
 
 
 # -- python -m media_cli.media.daemon ----------------------------------------------
@@ -490,7 +503,8 @@ def test_module_entry_point_is_quiet_and_idle_exits(env):
         check=False,
     )
     assert p.returncode == 0
-    assert p.stdout == "" and p.stderr == ""
+    assert p.stdout == ""
+    assert p.stderr == ""
     assert not (sockdir / server.SOCKET_NAME).exists()
 
 
@@ -527,8 +541,9 @@ def test_module_entry_point_bad_flag_exits_nonzero(env):
 def test_long_runtime_dir_fails_fast_without_spawning(env, monkeypatch):
     deep = env.base / ("d" * 60) / ("e" * 60)
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(deep))
+    client = DaemonClient()
     with pytest.raises(MediaEnvError) as ei:
-        DaemonClient().submit(SHORT_JOB)
+        client.submit(SHORT_JOB)
     assert ei.value.kind == "env.socket_path_too_long"
     assert "XDG_RUNTIME_DIR" in ei.value.remediation
     assert "bytes" in ei.value.message
@@ -591,6 +606,8 @@ def test_unreachable_oserror_has_remediation(env, monkeypatch):
             raise OSError("boom")
 
     monkeypatch.setattr(client_mod.socket, "socket", Boom)
+    client = DaemonClient()
     with pytest.raises(MediaEnvError) as ei:
-        DaemonClient().status("x")
-    assert ei.value.kind == "env.daemon_unavailable" and ei.value.remediation
+        client.status("x")
+    assert ei.value.kind == "env.daemon_unavailable"
+    assert ei.value.remediation

@@ -89,7 +89,8 @@ def test_legal_transitions(store):
     store.update(a.id, state="running")
     store.update(a.id, state="done", progress=1.0)
     rec = store.get(a.id)
-    assert rec.state == "done" and rec.progress == 1.0
+    assert rec.state == "done"
+    assert rec.progress == 1.0
     assert rec.timings["finished"] is not None
     b = store.create("k", [])
     assert store.update(b.id, state="cancelled").state == "cancelled"
@@ -115,7 +116,8 @@ def test_same_state_update_allowed_for_non_state_fields(store):
     store.update(rec.id, state="running")
     store.update(rec.id, progress=0.5, sense_calls=[{"a": 1}])
     got = store.get(rec.id)
-    assert got.progress == 0.5 and got.sense_calls == [{"a": 1}]
+    assert got.progress == 0.5
+    assert got.sense_calls == [{"a": 1}]
 
 
 def test_unknown_field_rejected(store):
@@ -143,7 +145,8 @@ def test_mark_failed_tail_and_log_path(store):
     assert got.error["kind"] == "env.ffmpeg_failed"
     assert got.error["log_path"] == str(store.log_path(rec.id))
     tail = got.error["stderr_tail"]
-    assert tail.splitlines()[-1] == "line49" and "line29" not in tail
+    assert tail.splitlines()[-1] == "line49"
+    assert "line29" not in tail
     assert len(tail.splitlines()) == 20
     assert "line30" in tail
 
