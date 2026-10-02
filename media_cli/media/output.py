@@ -52,22 +52,30 @@ INPUT_OUTPUT_DIR_MISSING = "input.output_dir_missing"
 INPUT_CONTAINER_INCOMPATIBLE = "input.container_incompatible"
 INPUT_OUTPUT_CONTAINER_MISMATCH = "input.output_container_mismatch"
 
+_WEBM_EXT = ".webm"
+
 _EXT_CONTAINER = {
     ".mp4": "mp4",
     ".m4v": "mp4",
     ".mov": "mov",
     ".mkv": "matroska",
-    ".webm": "webm",
+    _WEBM_EXT: "webm",
     ".avi": "avi",
 }
 _CONTAINER_EXTS = {
     "mp4": (".mp4", ".m4v", ".m4a"),
     "mov": (".mov",),
     "matroska": (".mkv",),
-    "webm": (".webm",),
+    "webm": (_WEBM_EXT,),
     "avi": (".avi",),
 }
-_CONTAINER_EXT = {"mp4": ".mp4", "mov": ".mov", "matroska": ".mkv", "webm": ".webm", "avi": ".avi"}
+_CONTAINER_EXT = {
+    "mp4": ".mp4",
+    "mov": ".mov",
+    "matroska": ".mkv",
+    "webm": _WEBM_EXT,
+    "avi": ".avi",
+}
 
 _VIDEO_ENCODERS = {
     "h264": "libx264",
@@ -350,10 +358,18 @@ def commit(plan: OutputPlan) -> str:
 
 @contextlib.contextmanager
 def atomic_output(plan: OutputPlan) -> Iterator[str]:
-    """Yield ``tmp_path``; commit on success, discard on any exception."""
+    """Yield ``tmp_path``; commit on success, discard on any exception.
+
+    Exactly one of commit/discard always runs, including when the block is
+    left by an exception or the generator is closed early (``GeneratorExit``):
+    ``dst`` is complete or absent, never partial.
+    """
+    completed = False
     try:
         yield plan.tmp_path
-    except BaseException:
-        discard(plan)
-        raise
-    commit(plan)
+        completed = True
+    finally:
+        if completed:
+            commit(plan)
+        else:
+            discard(plan)
