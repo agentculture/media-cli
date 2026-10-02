@@ -106,6 +106,9 @@ _KEYFRAME_TOL = 1e-3  # seconds; ffprobe prints 6 decimals
 _DEFAULT_FPS = 25.0
 _PROBE_TIMEOUT = 120
 _TIMING_FILTERS = frozenset({"setpts", "fps"})
+#: the fixed output pad labels of the compiled graph
+_VOUT = "[vout]"
+_AOUT = "[aout]"
 
 
 def input_clock(info: MediaInfo, t: float) -> float:
@@ -468,7 +471,7 @@ def compile_editlist(el: E.EditList, info: MediaInfo, *, fast: bool = False) -> 
         chain = _Chain(g, f"[0:{info.video.index}]")  # type: ignore[union-attr]
         for n in segs[0].v_nodes:
             chain.add(n)
-        labels[info.video.index] = chain.end("[vout]", "v")  # type: ignore[union-attr]
+        labels[info.video.index] = chain.end(_VOUT, "v")  # type: ignore[union-attr]
         touched = set(labels)
         graph_text = g.text()
         _require(g.used)
@@ -547,14 +550,14 @@ def _filter_graph(
                 c.add(FilterNode("setsar", {"sar": 1}, "v"))
             if el.transitions:
                 c.add(FilterNode("fps", {"fps": fps}, "v"))
-            v_label = c.end("[vout]" if not joined else g.label("v"), "v")
+            v_label = c.end(_VOUT if not joined else g.label("v"), "v")
         if has_a:
             c = _Chain(g, f"[0:{info.audio.index}]")  # type: ignore[union-attr]
             c.add(FilterNode("atrim", {"start": s.trim_start, "end": s.trim_end}, "a"))
             c.add(FilterNode("asetpts", {"offset": s.trim_start}, "a"))
             for n in s.a_nodes:
                 c.add(n)
-            a_label = c.end("[aout]" if not joined else g.label("a"), "a")
+            a_label = c.end(_AOUT if not joined else g.label("a"), "a")
         outs.append((v_label, a_label))
 
     if joined and el.transitions:
@@ -581,11 +584,11 @@ def _filter_graph(
             last = k == len(el.transitions) - 1
             v_next, a_next = outs[k + 1]
             if xf is not None:
-                lbl = "[vout]" if last else g.label("vx")
+                lbl = _VOUT if last else g.label("vx")
                 g.stmts.append(v_run + v_next + g.render(xf) + lbl)
                 v_run = lbl
             if ac is not None:
-                lbl = "[aout]" if last else g.label("ax")
+                lbl = _AOUT if last else g.label("ax")
                 g.stmts.append(a_run + a_next + g.render(ac) + lbl)
                 a_run = lbl
             overlap = xf.params["duration"] if xf is not None else ac.params["d"]  # type: ignore
@@ -593,11 +596,11 @@ def _filter_graph(
     elif joined:
         ins = "".join(v + a for v, a in outs)
         concat = FilterNode("concat", {"n": len(segs), "v": int(has_v), "a": int(has_a)}, "v")
-        out_labels = ("[vout]" if has_v else "") + ("[aout]" if has_a else "")
+        out_labels = (_VOUT if has_v else "") + (_AOUT if has_a else "")
         g.stmts.append(ins + g.render(concat) + out_labels)
     text = g.text()
     _require(g.used)
-    return text, "[vout]", "[aout]"
+    return text, _VOUT, _AOUT
 
 
 # ------------------------------------------------------------------ fast mode
