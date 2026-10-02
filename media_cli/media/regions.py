@@ -113,6 +113,27 @@ def _as_int(v: Any) -> int | None:
     return None
 
 
+def _read_box(item: Any) -> list[int | None]:
+    return [_as_int(item.get(k)) for k in "xywh"] if isinstance(item, dict) else [None]
+
+
+def _clip_box(
+    item: dict, box: tuple[int, int, int, int], width: int, height: int, t: float, rejected: list
+) -> _Edges | None:
+    """One readable box clipped to the frame as edges, or ``None`` if it is unusable."""
+    x, y, w, h = box
+    if w <= 0 or h <= 0:
+        rejected.append({"t": t, "box": item, "reason": "non_positive_size"})
+        return None
+    x1, y1, x2, y2 = max(0, x), max(0, y), min(width, x + w), min(height, y + h)
+    if x2 <= x1 or y2 <= y1:
+        rejected.append({"t": t, "box": item, "reason": "outside_frame"})
+        return None
+    if (x1, y1, x2, y2) != (x, y, x + w, y + h):
+        rejected.append({"t": t, "box": item, "reason": "clamped"})
+    return (float(x1), float(y1), float(x2), float(y2))
+
+
 def _validate(
     reply: Any, width: int, height: int, t: float, rejected: list[dict]
 ) -> list[_Edges] | None:
@@ -123,23 +144,16 @@ def _validate(
         return None
     ints: list[tuple[dict, int, int, int, int]] = []
     for item in items:
-        vals = [_as_int(item.get(k)) for k in "xywh"] if isinstance(item, dict) else [None]
+        vals = _read_box(item)
         if None in vals or len(vals) != 4:
             rejected.append({"t": t, "box": item, "reason": "malformed"})
             return None  # a box we cannot read may be the object: discard the frame
         ints.append((item, *vals))  # type: ignore[arg-type]
     out: list[_Edges] = []
     for item, x, y, w, h in ints:
-        if w <= 0 or h <= 0:
-            rejected.append({"t": t, "box": item, "reason": "non_positive_size"})
-            continue
-        x1, y1, x2, y2 = max(0, x), max(0, y), min(width, x + w), min(height, y + h)
-        if x2 <= x1 or y2 <= y1:
-            rejected.append({"t": t, "box": item, "reason": "outside_frame"})
-            continue
-        if (x1, y1, x2, y2) != (x, y, x + w, y + h):
-            rejected.append({"t": t, "box": item, "reason": "clamped"})
-        out.append((float(x1), float(y1), float(x2), float(y2)))
+        edges = _clip_box(item, (x, y, w, h), width, height, t, rejected)
+        if edges is not None:
+            out.append(edges)
     return out or None
 
 
@@ -212,8 +226,51 @@ def _plan_times(
     return [ftimes[i] for i in sorted(idx)]
 
 
+_Emit = Callable[[_Edges, float, float], None]
+_Sample = tuple[float, list[_Edges] | None]
+
+
+def _add_gap(gaps: list[list[float]], ta: float, tb: float) -> None:
+    """Record ``[ta, tb]`` as uncovered, merging it into an abutting previous gap."""
+    if gaps and gaps[-1][1] == ta:
+        gaps[-1][1] = tb
+    else:
+        gaps.append([ta, tb])
+
+
+def _emit_interval(
+    ba: list[_Edges],
+    bb: list[_Edges],
+    ta: float,
+    tb: float,
+    method: str,
+    substeps: int,
+    emit: _Emit,
+) -> None:
+    """Emit regions covering ``[ta, tb]`` between two detected samples."""
+    pairs, rest = _pair(ba, bb)
+    for e in rest:
+        emit(e, ta, tb)
+    for p, q in pairs:
+        if method == "hold":
+            emit(_union(p, q), ta, tb)
+            continue
+        for k in range(substeps):
+            f0, f1 = k / substeps, (k + 1) / substeps
+            emit(
+                _union(_lerp(p, q, f0), _lerp(p, q, f1)),
+                ta + (tb - ta) * f0,
+                ta + (tb - ta) * f1,
+            )
+
+
+def _emit_point(boxes: list[_Edges] | None, t: float, emit: _Emit) -> None:
+    for e in boxes or []:
+        emit(e, t, t + POINT_SPAN)
+
+
 def _build_regions(
-    samples: list[tuple[float, list[_Edges] | None]],
+    samples: list[_Sample],
     method: str,
     substeps: int,
     margin: int,
@@ -233,39 +290,58 @@ def _build_regions(
         t, boxes = samples[0]
         if boxes is None:
             gaps.append([t, t])
-        for e in boxes or []:
-            emit(e, t, t + POINT_SPAN)
+        _emit_point(boxes, t, emit)
         return regions, gaps
     uncovered = [False] * (n - 1)
     for i in range(n - 1):
         (ta, ba), (tb, bb) = samples[i], samples[i + 1]
         if ba is None or bb is None:
             uncovered[i] = True
-            if gaps and gaps[-1][1] == ta:
-                gaps[-1][1] = tb
-            else:
-                gaps.append([ta, tb])
+            _add_gap(gaps, ta, tb)
             continue
-        pairs, rest = _pair(ba, bb)
-        for e in rest:
-            emit(e, ta, tb)
-        for p, q in pairs:
-            if method == "hold":
-                emit(_union(p, q), ta, tb)
-                continue
-            for k in range(substeps):
-                f0, f1 = k / substeps, (k + 1) / substeps
-                emit(
-                    _union(_lerp(p, q, f0), _lerp(p, q, f1)),
-                    ta + (tb - ta) * f0,
-                    ta + (tb - ta) * f1,
-                )
+        _emit_interval(ba, bb, ta, tb, method, substeps, emit)
     for i, (t, boxes) in enumerate(samples):
-        adjacent = [uncovered[j] for j in (i - 1, i) if 0 <= j < n - 1]
-        if boxes and any(adjacent):
-            for e in boxes:
-                emit(e, t, t + POINT_SPAN)
+        if boxes and any(uncovered[j] for j in (i - 1, i) if 0 <= j < n - 1):
+            _emit_point(boxes, t, emit)
     return regions, gaps
+
+
+def _check_args(description: Any, method: str, fps: Any, margin: Any, substeps: Any) -> None:
+    if not isinstance(description, str) or not description.strip():
+        raise _bad("description is empty", "say what to find, e.g. 'the license plate'")
+    if method not in METHODS:
+        raise _bad(f"unknown method {method!r}", f"use one of: {', '.join(METHODS)}")
+    if not (isinstance(fps, (int, float)) and math.isfinite(fps) and fps > 0):
+        raise _bad(f"fps must be > 0, got {fps!r}", "pass a positive sampling rate")
+    if _as_int(margin) is None or margin < 0 or _as_int(substeps) is None or substeps < 1:
+        raise _bad("margin must be >= 0 and substeps >= 1", "pass non-negative integers")
+
+
+def _sample_frames(
+    client: Any,
+    shots: list[dict],
+    prompt: str,
+    width: int,
+    height: int,
+    rejected: list[dict],
+    samples: list[_Sample],
+    errors: list[MediaEnvError],
+) -> None:
+    """Ask the senses role about each shot; an unavailable sense marks that frame uncovered."""
+    for shot in shots:
+        t = shot["t"]
+        try:
+            reply = client.describe_images(
+                [shot["path"]], prompt, role="senses", response_format=_RESPONSE_FORMAT
+            )
+        except MediaEnvError as exc:
+            if exc.kind != ENV_SENSE_UNAVAILABLE:
+                raise
+            errors.append(exc)
+            rejected.append({"t": t, "box": {"error": exc.message}, "reason": "model_error"})
+            samples.append((t, None))
+            continue
+        samples.append((t, _validate(reply, width, height, t, rejected)))
 
 
 def find_regions(
@@ -282,14 +358,7 @@ def find_regions(
     substeps: int = 4,
 ) -> dict[str, Any]:
     """Find redaction regions for *description*; see the module docstring for the contract."""
-    if not isinstance(description, str) or not description.strip():
-        raise _bad("description is empty", "say what to find, e.g. 'the license plate'")
-    if method not in METHODS:
-        raise _bad(f"unknown method {method!r}", f"use one of: {', '.join(METHODS)}")
-    if not (isinstance(fps, (int, float)) and math.isfinite(fps) and fps > 0):
-        raise _bad(f"fps must be > 0, got {fps!r}", "pass a positive sampling rate")
-    if _as_int(margin) is None or margin < 0 or _as_int(substeps) is None or substeps < 1:
-        raise _bad("margin must be >= 0 and substeps >= 1", "pass non-negative integers")
+    _check_args(description, method, fps, margin, substeps)
     src = os.fspath(path)
     info = probe.probe(src)
     if info.video is None or not info.video.width or not info.video.height:
@@ -303,25 +372,12 @@ def find_regions(
 
     tmp = tempfile.mkdtemp(prefix="regions-", dir=None if workdir is None else os.fspath(workdir))
     rejected: list[dict] = []
-    samples: list[tuple[float, list[_Edges] | None]] = []
+    samples: list[_Sample] = []
     errors: list[MediaEnvError] = []
     try:
         shots = frames.extract(src, times=plan, outdir=tmp, max_frames=len(plan))
         prompt = _prompt(description, width, height)
-        for shot in shots:
-            t = shot["t"]
-            try:
-                reply = client.describe_images(
-                    [shot["path"]], prompt, role="senses", response_format=_RESPONSE_FORMAT
-                )
-            except MediaEnvError as exc:
-                if exc.kind != ENV_SENSE_UNAVAILABLE:
-                    raise
-                errors.append(exc)
-                rejected.append({"t": t, "box": {"error": exc.message}, "reason": "model_error"})
-                samples.append((t, None))
-                continue
-            samples.append((t, _validate(reply, width, height, t, rejected)))
+        _sample_frames(client, shots, prompt, width, height, rejected, samples, errors)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     if errors and len(errors) == len(samples):
