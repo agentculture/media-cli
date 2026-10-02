@@ -98,22 +98,29 @@ DELETE = object()
 
 def test_parse_good_and_defaults():
     el = E.parse(good())
-    assert el.input == "in.mp4" and el.output == "out.mp4"
-    assert el.overwrite is False and el.keep == ()
+    assert el.input == "in.mp4"
+    assert el.output == "out.mp4"
+    assert el.overwrite is False
+    assert el.keep == ()
     assert len(el.segments) == 2
     crop, speed, fade = el.segments[0].ops
     assert (crop.op, crop.x, crop.w, crop.h) == ("crop", 0, 160, 120)
-    assert speed.factor == 2 and fade.direction == "in"
+    assert speed.factor == 2
+    assert fade.direction == "in"
     box, blur = el.segments[1].ops
-    assert box.fill == "black" and box.regions[0].start == 5.5
-    assert blur.strength == 5 and blur.regions[0].start is None
-    assert el.transitions[0].type == "xfade" and el.transitions[0].style == "dissolve"
+    assert box.fill == "black"
+    assert box.regions[0].start == 5.5
+    assert blur.strength == 5
+    assert blur.regions[0].start is None
+    assert el.transitions[0].type == "xfade"
+    assert el.transitions[0].style == "dissolve"
 
 
 def test_parse_json_text_and_minimal():
     text = json.dumps({"input": "a", "output": "b", "segments": [{"start": 0, "end": 1}]})
     el = E.parse(text)
-    assert el.segments[0].ops == () and el.transitions == ()
+    assert el.segments[0].ops == ()
+    assert el.transitions == ()
     assert E.parse(text) == el  # frozen dataclasses compare by value
 
 
@@ -256,17 +263,20 @@ def test_injection_into_enum_fields_rejected(path, payload):
     ],
 )
 def test_injection_into_numeric_fields_rejected(path, payload):
+    doc = mutated(path, payload)
     with pytest.raises(MediaInputError) as ei:
-        E.parse(mutated(path, payload))
+        E.parse(doc)
     assert ei.value.kind == INVALID
 
 
 @pytest.mark.parametrize("field", ["input", "output"])
 @pytest.mark.parametrize("bad", ["", "-rf", "a\x00b", 7, None, ["a"]])
 def test_path_fields_hardened(field, bad):
+    doc = mutated([field], bad)
     with pytest.raises(MediaInputError) as ei:
-        E.parse(mutated([field], bad))
-    assert ei.value.kind == INVALID and field in ei.value.message
+        E.parse(doc)
+    assert ei.value.kind == INVALID
+    assert field in ei.value.message
 
 
 def test_paths_with_filter_metacharacters_are_just_paths():
@@ -315,8 +325,9 @@ def test_region_pointer_deep():
         {"x": 0, "y": 0, "w": 5, "h": 5},
         {"x": 0, "y": 0, "w": 400, "h": 5},
     ]
+    el = E.parse(obj)
     with pytest.raises(MediaInputError) as ei:
-        E.validate(E.parse(obj), INFO)
+        E.validate(el, INFO)
     assert "segments[1].ops[0].regions[2].w" in ei.value.message
 
 
@@ -339,9 +350,11 @@ def test_regions_after_crop_bound_by_cropped_frame():
             }
         ],
     }
+    el = E.parse(obj)
     with pytest.raises(MediaInputError) as ei:
-        E.validate(E.parse(obj), INFO)
-    assert ei.value.kind == R and "segments[0].ops[1].regions[0].w" in ei.value.message
+        E.validate(el, INFO)
+    assert ei.value.kind == R
+    assert "segments[0].ops[1].regions[0].w" in ei.value.message
 
 
 def test_normalized_bounds_with_offset_origin():
@@ -351,8 +364,9 @@ def test_normalized_bounds_with_offset_origin():
     obj = {"input": "a", "output": "b", "segments": [{"start": 0, "end": 10}]}
     E.validate(E.parse(obj), info)
     obj["segments"][0]["end"] = 10.6
+    el = E.parse(obj)
     with pytest.raises(MediaInputError):
-        E.validate(E.parse(obj), info)
+        E.validate(el, info)
 
 
 def test_spatial_ops_need_video_stream():
@@ -370,9 +384,11 @@ def test_spatial_ops_need_video_stream():
             {"start": 0, "end": 1, "ops": [{"op": "crop", "x": 0, "y": 0, "w": 1, "h": 1}]}
         ],
     }
+    el = E.parse(obj)
     with pytest.raises(MediaInputError) as ei:
-        E.validate(E.parse(obj), audio_only)
-    assert ei.value.kind == INVALID and "segments[0].ops[0]" in ei.value.message
+        E.validate(el, audio_only)
+    assert ei.value.kind == INVALID
+    assert "segments[0].ops[0]" in ei.value.message
     obj["segments"][0]["ops"] = [{"op": "speed", "factor": 2}]
     E.validate(E.parse(obj), audio_only)
 
@@ -399,8 +415,9 @@ def test_validate_is_pure_no_subprocess(monkeypatch):
     monkeypatch.setattr(_tools, "spawn", boom)
     el = E.parse(good())
     assert E.validate(el, INFO) is el
+    el = E.parse(mutated(["segments", 1, "end"], 99))
     with pytest.raises(MediaInputError):
-        E.validate(E.parse(mutated(["segments", 1, "end"], 99)), INFO)
+        E.validate(el, INFO)
 
 
 def test_load_and_validate_uses_probe(media_mp4, tmp_path):
@@ -441,16 +458,19 @@ def test_end_within_one_frame_past_editable_end_is_clamped():
 
 def test_end_beyond_one_frame_is_refused_and_names_probe_bound():
     info = make_info(duration=10.0, fps=25.0)
+    el = _one_seg(10.05)
     with pytest.raises(MediaInputError) as ei:
-        E.validate(_one_seg(10.05), info)
+        E.validate(el, info)
     assert ei.value.kind == T
     assert "segments[0].end" in ei.value.message
     assert "editable.end" in ei.value.message + ei.value.remediation
     assert "10.000" in ei.value.message
-    assert "media probe" in ei.value.remediation and "--json" in ei.value.remediation
+    assert "media probe" in ei.value.remediation
+    assert "--json" in ei.value.remediation
 
 
 def test_no_frame_interval_means_no_slack():
     info = make_info(duration=10.0)  # fps unknown
+    el = _one_seg(10.01)
     with pytest.raises(MediaInputError):
-        E.validate(_one_seg(10.01), info)
+        E.validate(el, info)

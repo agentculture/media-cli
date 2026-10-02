@@ -55,10 +55,12 @@ def test_speed_in_range_single_atempo():
 def test_speed_atempo_chain_product_and_bounds(factor):
     nodes = visual.build(E.Speed(factor=factor), _ctx())
     tempos = [n.params["tempo"] for n in nodes if n.name == "atempo"]
-    assert tempos and all(0.5 <= t <= 2.0 for t in tempos)
+    assert tempos
+    assert all(0.5 <= t <= 2.0 for t in tempos)
     assert math.prod(tempos) == pytest.approx(factor, rel=1e-6)
     setpts = [n for n in nodes if n.name == "setpts"]
-    assert len(setpts) == 1 and setpts[0].params["speed"] == pytest.approx(factor)
+    assert len(setpts) == 1
+    assert setpts[0].params["speed"] == pytest.approx(factor)
     assert "offset" not in setpts[0].params
 
 
@@ -94,8 +96,10 @@ def test_fade_longer_than_segment_is_clamped():
 
 
 def test_unknown_op_not_implemented():
+    op = E.Box(regions=(), fill="black")
+    ctx = _ctx()
     with pytest.raises(MediaInputError) as ei:
-        visual.build(E.Box(regions=(), fill="black"), _ctx())
+        visual.build(op, ctx)
     assert ei.value.kind == "input.op_not_implemented"
 
 

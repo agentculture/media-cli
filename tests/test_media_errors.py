@@ -80,13 +80,15 @@ def test_ffmpeg_failure_tails_stderr_no_traceback():
     assert err.kind == E.ENV_FFMPEG_FAILED
     lines = err.remediation.splitlines()
     assert lines[-1] == "line 99"
-    assert "line 80" in lines and "line 79" not in lines
+    assert "line 80" in lines
+    assert "line 79" not in lines
     assert "Traceback" not in err.remediation
 
 
 def test_ffmpeg_failure_empty_stderr():
     err = ffmpeg_failure("")
-    assert err.code == 2 and err.kind == E.ENV_FFMPEG_FAILED
+    assert err.code == 2
+    assert err.kind == E.ENV_FFMPEG_FAILED
 
 
 def test_json_error_output_includes_kind(tmp_path):
