@@ -26,6 +26,8 @@ jobs:
 
       - run: uv sync
 
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - run: uv run pytest -n auto -v
 
   test-publish:

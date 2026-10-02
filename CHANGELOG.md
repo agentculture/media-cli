@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-01
+
+### Added
+
+- Media editing lane: `media probe` (streams, normalized time base, `editable` range) and `media frames` (local frame extraction and contact sheet, optional `--describe` through local lobes senses)
+- `media edit plan|apply|regions`: a declarative JSON edit list (cut, crop, speed, fade, black-box and blur redaction, xfade/acrossfade shorts) compiled to one allowlisted, typed ffmpeg filtergraph; dry-run by default, `--apply` submits a daemon job; `regions` asks local Gemma (senses) for redaction boxes with a coverage report
+- `media search index|query|purge|cache`: semantic frame search (captions + yes/no matching) and chunked speech search with evidence, a fingerprint- and identity-keyed cache, a sense-call budget, and caption retry with per-frame fallback
+- `media job status|result|cancel|list` and an on-demand daemon (0600 unix socket, SO_PEERCRED check, single instance, process-group kill, idle exit, no-clobber atomic publish)
+- Typed media errors with machine `kind` codes in `--json`; lavfi test fixtures; an end-to-end suite driving the installed `media` command; CI installs ffmpeg; opt-in `live_gateway` tests
+- devague artifacts: spec, plan, implementation split and delivery summary for media-file-editing
+
+### Changed
+
+- The program name is now `media` (the installed command) in help, error hints, `learn` and the `explain` catalog; the agent-facing self-docs describe the device plane + editing lanes instead of template prose
+- CLAUDE.md, README.md and the pyproject description state the expanded lane; stale 'ffmpeg absent' and 'webcam-cli is a bare scaffold' claims corrected
+
 ## [0.6.3] - 2026-09-30
 
 ### Added

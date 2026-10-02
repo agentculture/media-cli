@@ -30,7 +30,7 @@ def _no_verb(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "cli",
-        help="CLI-surface introspection (see 'media-cli cli overview').",
+        help="CLI-surface introspection (see 'media cli overview').",
     )
     p.add_argument("--json", action="store_true", help="Emit structured JSON.")
     p.set_defaults(func=_no_verb, json=False)
