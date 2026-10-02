@@ -173,7 +173,7 @@ class SensesClient:
                     attempt += 1
                     continue
                 raise _unavailable(f"senses gateway returned HTTP {exc.code} for {path}") from exc
-            except (urllib.error.URLError, OSError) as exc:  # includes timeouts
+            except OSError as exc:  # URLError and timeouts are OSError subclasses
                 raise _unavailable(f"senses gateway unreachable at {url}: {_why(exc)}") from exc
 
     @staticmethod
@@ -192,7 +192,7 @@ class SensesClient:
             raw = self._request(role, CAPABILITIES_PATH)
             try:
                 parsed = json.loads(raw.decode("utf-8"))
-            except (ValueError, UnicodeDecodeError):
+            except ValueError:  # includes UnicodeDecodeError
                 parsed = None
             self._caps = parsed if isinstance(parsed, dict) else {}
         return self._caps
@@ -246,7 +246,12 @@ class SensesClient:
         )
         try:
             content = json.loads(raw.decode("utf-8"))["choices"][0]["message"]["content"]
-        except (ValueError, KeyError, IndexError, TypeError, UnicodeDecodeError) as exc:
+        except (
+            ValueError,
+            KeyError,
+            IndexError,
+            TypeError,
+        ) as exc:  # ValueError covers UnicodeDecodeError
             raise _unavailable("senses gateway returned a malformed chat response") from exc
         if not isinstance(content, str):
             raise _unavailable("senses gateway returned a non-text chat response")
@@ -305,7 +310,7 @@ class SensesClient:
         )
         try:
             text = json.loads(raw.decode("utf-8"))["text"]
-        except (ValueError, KeyError, TypeError, UnicodeDecodeError) as exc:
+        except (ValueError, KeyError, TypeError) as exc:  # ValueError covers UnicodeDecodeError
             raise _unavailable("senses gateway returned a malformed transcription") from exc
         if not isinstance(text, str):
             raise _unavailable("senses gateway returned a non-text transcription")

@@ -293,7 +293,7 @@ def purge_transcripts(path: str | os.PathLike, *, cache_dir: str | None = None) 
     with contextlib.suppress(MediaInputError):
         fp16 = _fp16(path)
     removed = 0
-    for name, f, doc in list(_transcript_files(cache_dir)):
+    for name, f, doc in _transcript_files(cache_dir):  # listing is snapshotted
         if _matches(name, doc, real, fp16):
             with contextlib.suppress(OSError):
                 os.remove(f)
@@ -318,43 +318,49 @@ def _size(directory: str) -> int:
     return total
 
 
-def cache_report(
-    path: str | os.PathLike | None = None, *, cache_dir: str | None = None
-) -> dict[str, Any]:
-    """List cached index dirs and transcripts (all, or only those of *path*); read-only."""
-    root = cache_dir or index.default_cache_dir()
-    real = os.path.realpath(os.fspath(path)) if path is not None else None
-    fp16 = None
-    if path is not None:
-        with contextlib.suppress(MediaInputError):
-            fp16 = _fp16(path)
-    indexes = []
-    if os.path.isdir(root):
-        for name in sorted(os.listdir(root)):
-            d = os.path.join(root, name)
-            if not os.path.isdir(d) or name.startswith("."):
-                continue
-            try:
-                with open(os.path.join(d, index.INDEX_FILE), encoding="utf-8") as fh:
-                    doc = json.load(fh)
-            except (OSError, ValueError):
-                doc = {}
-            doc = doc if isinstance(doc, dict) else {}
-            if real is not None and not _matches(name, doc, real, fp16):
-                continue
-            indexes.append(
-                {
-                    "dir": d,
-                    "bytes": _size(d),
-                    "source": doc.get("source"),
-                    "fingerprint": name.split("-")[0],
-                    "identity": doc.get("identity"),
-                    "entries": len(doc.get("entries", [])),
-                }
-            )
-    transcripts = []
+def _wanted(name: str, doc: dict, real: str | None, fp16: str | None) -> bool:
+    return real is None or _matches(name, doc, real, fp16)
+
+
+def _read_index_doc(d: str) -> dict:
+    try:
+        with open(os.path.join(d, index.INDEX_FILE), encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, ValueError):
+        doc = {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _index_entries(root: str, real: str | None, fp16: str | None) -> list[dict[str, Any]]:
+    indexes: list[dict[str, Any]] = []
+    if not os.path.isdir(root):
+        return indexes
+    for name in sorted(os.listdir(root)):
+        d = os.path.join(root, name)
+        if not os.path.isdir(d) or name.startswith("."):
+            continue
+        doc = _read_index_doc(d)
+        if not _wanted(name, doc, real, fp16):
+            continue
+        indexes.append(
+            {
+                "dir": d,
+                "bytes": _size(d),
+                "source": doc.get("source"),
+                "fingerprint": name.split("-")[0],
+                "identity": doc.get("identity"),
+                "entries": len(doc.get("entries", [])),
+            }
+        )
+    return indexes
+
+
+def _transcript_entries(
+    cache_dir: str | None, real: str | None, fp16: str | None
+) -> list[dict[str, Any]]:
+    transcripts: list[dict[str, Any]] = []
     for name, f, doc in _transcript_files(cache_dir):
-        if real is not None and not _matches(name, doc, real, fp16):
+        if not _wanted(name, doc, real, fp16):
             continue
         with contextlib.suppress(OSError):
             transcripts.append(
@@ -366,6 +372,21 @@ def cache_report(
                     "segments": len(doc.get("segments", [])),
                 }
             )
+    return transcripts
+
+
+def cache_report(
+    path: str | os.PathLike | None = None, *, cache_dir: str | None = None
+) -> dict[str, Any]:
+    """List cached index dirs and transcripts (all, or only those of *path*); read-only."""
+    root = cache_dir or index.default_cache_dir()
+    real = os.path.realpath(os.fspath(path)) if path is not None else None
+    fp16 = None
+    if path is not None:
+        with contextlib.suppress(MediaInputError):
+            fp16 = _fp16(path)
+    indexes = _index_entries(root, real, fp16)
+    transcripts = _transcript_entries(cache_dir, real, fp16)
     return {
         "indexes": indexes,
         "transcripts": transcripts,

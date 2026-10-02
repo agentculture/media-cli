@@ -47,7 +47,7 @@ def _plan(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
-def cmd_index(args: argparse.Namespace) -> int:
+def cmd_index(args: argparse.Namespace) -> None:
     plan = _plan(args)  # raises input.budget_exceeded before anything is submitted
     if not args.apply:
         doc = {"dry_run": True, **plan}
@@ -56,7 +56,7 @@ def cmd_index(args: argparse.Namespace) -> int:
             f"{plan['sense_calls']} sense calls (cap {plan['cap']}), cached: {plan['cached']}"
         )
         emit_result(doc if _json(args) else text, json_mode=_json(args))
-        return 0
+        return
     from media_cli.media.daemon.client import DaemonClient  # lazy: dry runs never touch it
 
     job = {
@@ -72,7 +72,6 @@ def cmd_index(args: argparse.Namespace) -> int:
         doc if _json(args) else f"submitted index job {job_id} ({plan['sense_calls']} sense calls)",
         json_mode=_json(args),
     )
-    return 0
 
 
 def _hits_text(doc: dict[str, Any]) -> str:
@@ -113,7 +112,7 @@ def _purge_text(prefix: str, rep: dict[str, Any]) -> str:
     return f"{prefix}: {len(rep['indexes'])} index dir(s), {len(rep['transcripts'])} transcript(s)"
 
 
-def cmd_purge(args: argparse.Namespace) -> int:
+def cmd_purge(args: argparse.Namespace) -> None:
     rep = media_search.cache_report(args.file)
     if not args.apply:
         doc = {
@@ -126,12 +125,11 @@ def cmd_purge(args: argparse.Namespace) -> int:
             doc if _json(args) else _purge_text("dry run, would remove", rep),
             json_mode=_json(args),
         )
-        return 0
+        return
     removed = media_search.purge(args.file)
     doc = {"dry_run": False, "file": os.path.abspath(args.file), "removed": removed}
     text = f"removed {removed['indexes']} index dir(s), {removed['transcripts']} transcript(s)"
     emit_result(doc if _json(args) else text, json_mode=_json(args))
-    return 0
 
 
 def cmd_cache(args: argparse.Namespace) -> int:

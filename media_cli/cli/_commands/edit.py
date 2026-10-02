@@ -65,10 +65,10 @@ def cmd_plan(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_apply(args: argparse.Namespace) -> int:
+def cmd_apply(args: argparse.Namespace) -> None:
     if not args.apply:
         _emit_plan(args, dry=True)
-        return 0
+        return
     from media_cli.media.daemon.client import DaemonClient  # lazy: dry runs never touch it
 
     el, compiled = _compile(args.editlist, args.fast)
@@ -81,7 +81,6 @@ def cmd_apply(args: argparse.Namespace) -> int:
         doc if _json(args) else f"submitted job {job_id} -> {spec['output']}",
         json_mode=_json(args),
     )
-    return 0
 
 
 def _regions_text(doc: dict[str, Any]) -> str:
