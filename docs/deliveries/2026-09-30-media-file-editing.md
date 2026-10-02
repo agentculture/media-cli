@@ -247,15 +247,49 @@ PR #4's first CI run found what the validation pass had missed:
     outside home, `$XDG_STATE_HOME` or the temp dir, and directories not owned
     by the user (`input.job_store_invalid`). Three tests cover this.
   - The 282 code smells (mostly test-style rules `S9073`/`S5778`) do not fail
-    the gate and are left as follow-up.
+    the gate. They were cleaned up afterwards; see the next section.
 - **`o17` leftover:** a `jobs.py` hint named a nonexistent `media jobs`
   command. It now says `media job list`.
+
+### SonarCloud code-smell cleanup (post-PR, merged at `c201ad4`)
+
+The 282 non-gating issues were fixed in seven file-disjoint branches
+(`sonar/*`, merged with the suite green before and after every merge). Every
+fix is meant to be a pure refactor: no CLI, JSON, exit-code, error-kind, argv
+or filtergraph change was intended, and none was found.
+
+- **Tests (247):** `S9073` composite asserts split, `S5778` setup moved out of
+  `pytest.raises`, `S5958` narrowed to the raised type, `S3415` order fixed.
+  No assertion was removed.
+- **`compile.py` `S2589`:** a dead, always-true sub-condition in `_scaled`,
+  simplified. Pinned by `tests/test_sonar_p_compile_sizing.py` against a copy
+  of the old body. Not a bug.
+- **`output.atomic_output` `S9152`:** commit or discard now runs from one
+  `finally` with a success flag (`o5`). Pinned by
+  `tests/test_sonar_p_io_output.py`.
+- **`S3776` (17):** functions split into same-module helpers. The
+  `compile`/`ops` refactor was checked against a 2,931-case golden snapshot
+  (byte-identical; not committed). `regions` was checked by differential tests
+  against frozen copies of the old functions
+  (`tests/test_sonar_p_sense_regions.py`).
+- **Other:** redundant exception classes, `"[vout]"`/`"[aout]"`/`".webm"`
+  constants, handlers return `None`, and a public `index.index_dir` replacing
+  the private `_location` access in `handlers.py`.
+- **Flake fixed:** `test_distinct_machine_codes_for_corrupt_range_and_offframe`
+  used `os.urandom`. About 1 % of random blobs probe as a stream-less format,
+  so the fixture is now seeded.
+- **Gates:**
+  - Suite: 1068 passed, 2 skipped. With ffmpeg hidden: 748 passed, 322
+    skipped, 0 failed.
+  - Lint is clean, the rubric is 26/26, and markdownlint is clean.
+  - Lapses `l15`/`l16` record two subagents' ungated or untested commits.
+  - Whether Sonar now reports zero is unverified until the next scan.
 
 ## Remaining Work / Follow-up
 
 - After the `a7ce61e` push, PR #4's CI passed: both test jobs, lint,
   version-check, GitGuardian and the TestPyPI dry-run, plus the SonarCloud
-  quality gate. The 282 non-gating code smells still need triage.
+  quality gate. The 282 non-gating code smells were fixed afterwards (above).
 
 No plan task is partial, dropped or blocked. Remaining items:
 

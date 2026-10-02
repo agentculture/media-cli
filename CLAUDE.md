@@ -73,7 +73,7 @@ Verbs beyond the six template ones (`whoami`, `learn`, `explain`, `overview`,
 routing, playback, arbitration). `media_cli/` still contains **no device code**;
 `explain media` and `learn` say so. Everything under "Domain constraints" and
 "Open design questions" below describes that unbuilt half — host evidence and
-open questions, not shipped behaviour. Everything is green: 784 tests pass (2
+open questions, not shipped behaviour. Everything is green: 1068 tests pass (2
 skipped: the opt-in live-gateway tests), the rubric gate passes, markdownlint is
 clean.
 
@@ -119,7 +119,7 @@ switch.
 ```bash
 uv sync                                    # install (dev group included)
 
-uv run pytest -n auto                      # full suite, parallel (784 tests, 2 skipped)
+uv run pytest -n auto                      # full suite, parallel (1068 tests, 2 skipped)
 uv run pytest tests/test_cli.py::test_whoami_json -v   # a single test (drop -n)
 uv run pytest -n auto --cov=media_cli --cov-report=term   # coverage; fail_under = 60
 
