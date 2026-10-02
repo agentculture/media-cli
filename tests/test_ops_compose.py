@@ -76,14 +76,17 @@ def test_build_is_pure_no_io(monkeypatch):
 
 def test_unsupported_style_is_not_implemented():
     bad = SimpleNamespace(type="xfade", duration=0.5, style="circleopen")
+    ctx = _ctx()
     with pytest.raises(MediaInputError) as ei:
-        compose.build(bad, _ctx())
+        compose.build(bad, ctx)
     assert ei.value.kind == INPUT_OP_NOT_IMPLEMENTED
 
 
 def test_no_streams_is_not_implemented():
+    op = E.Transition(type="xfade", duration=0.5)
+    ctx = _ctx(False, False)
     with pytest.raises(MediaInputError) as ei:
-        compose.build(E.Transition(type="xfade", duration=0.5), _ctx(False, False))
+        compose.build(op, ctx)
     assert ei.value.kind == INPUT_OP_NOT_IMPLEMENTED
 
 
@@ -123,7 +126,8 @@ def test_three_segments_two_half_second_transitions(media_mp4, tmp_path):
     )
     c, dst = _render(doc)
     assert c.expected_duration == pytest.approx(5.0)
-    assert "xfade=transition=fade" in c.graph and "acrossfade" in c.graph
+    assert "xfade=transition=fade" in c.graph
+    assert "acrossfade" in c.graph
     info = P.probe(dst)
     assert info.video.duration == pytest.approx(5.0, abs=FRAME)
     assert info.audio.duration == pytest.approx(5.0, abs=FRAME)
