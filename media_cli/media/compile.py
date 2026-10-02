@@ -235,10 +235,11 @@ def _scaled(w: int, h: int, cur: tuple[int | None, int | None]) -> tuple[int | N
         return w, h
     if not cw or not ch:
         return None, None
-    if w <= 0 and h > 0:
+    # At most one side is positive past the first return.
+    if h > 0:  # width is auto (w <= 0): derive it from the height
         w2 = round(h * cw / ch)
         return (w2 + (w2 % 2) if w == -2 else w2), h
-    if h <= 0 and w > 0:
+    if w > 0:  # height is auto (h <= 0): derive it from the width
         h2 = round(w * ch / cw)
         return w, (h2 + (h2 % 2) if h == -2 else h2)
     return cw, ch
