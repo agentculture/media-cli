@@ -251,50 +251,71 @@ def _scaled(w: int, h: int, cur: tuple[int | None, int | None]) -> tuple[int | N
 def _build_segments(
     el: E.EditList, info: MediaInfo, *, passthrough: bool, flags: dict
 ) -> list[_Seg]:
+    return [
+        _build_segment(i, seg, info, passthrough=passthrough, flags=flags)
+        for i, seg in enumerate(el.segments)
+    ]
+
+
+def _build_segment(
+    i: int, seg: E.Segment, info: MediaInfo, *, passthrough: bool, flags: dict
+) -> _Seg:
+    """Dispatch every op of one segment through ``REGISTRY`` and track its geometry/speed."""
     has_v, has_a = info.video is not None, info.audio is not None
-    segs: list[_Seg] = []
-    for i, seg in enumerate(el.segments):
-        s = _Seg(i, seg)
-        if info.video is not None:
-            s.width, s.height, s.fps = info.video.width, info.video.height, info.video.fps
-        s.trim_start = max(input_clock(info, seg.start) - EPSILON, 0.0)
-        s.trim_end = max(input_clock(info, seg.end) - EPSILON, 0.0)
-        base = 0.0 if passthrough else s.trim_start
-        for j, op in enumerate(seg.ops):
-            ctx = SegmentContext(
-                index=i,
-                op_index=j,
-                start=seg.start,
-                end=seg.end,
-                source_start=info.to_source_seconds(seg.start),
-                source_end=info.to_source_seconds(seg.end),
-                info=info,
-                width=s.width,
-                height=s.height,
-                fps=s.fps,
-                sample_rate=info.audio.sample_rate if info.audio else None,
-                has_video=has_v,
-                has_audio=has_a,
-                speed=s.speed_v if has_v else s.speed_a,
-                clock_base=base,
-                flags=flags,
-            )
-            where = f"segments[{i}].ops[{j}] ({op.op})"
-            for n in _check_segment_nodes(REGISTRY[op.op].build(op, ctx), where):
-                if n.stream == "v" and has_v:
-                    s.v_nodes.append(n)
-                    if isinstance(n, FilterNode):
-                        _track_video(s, n)
-                elif n.stream == "a" and has_a and isinstance(n, FilterNode):
-                    s.a_nodes.append(n)
-                    if n.name == "atempo":
-                        s.speed_a *= n.params["tempo"]
-        if has_v and has_a and abs(s.speed_v - s.speed_a) > 1e-6:
-            raise ValueError(
-                f"segments[{i}]: video speed {s.speed_v} != audio speed {s.speed_a} (A/V desync)"
-            )
-        segs.append(s)
-    return segs
+    s = _Seg(i, seg)
+    if info.video is not None:
+        s.width, s.height, s.fps = info.video.width, info.video.height, info.video.fps
+    s.trim_start = max(input_clock(info, seg.start) - EPSILON, 0.0)
+    s.trim_end = max(input_clock(info, seg.end) - EPSILON, 0.0)
+    base = 0.0 if passthrough else s.trim_start
+    for j, op in enumerate(seg.ops):
+        ctx = _segment_context(s, info, j, base, flags)
+        where = f"segments[{i}].ops[{j}] ({op.op})"
+        for n in _check_segment_nodes(REGISTRY[op.op].build(op, ctx), where):
+            _route_node(s, n, has_v=has_v, has_a=has_a)
+    if has_v and has_a and abs(s.speed_v - s.speed_a) > 1e-6:
+        raise ValueError(
+            f"segments[{i}]: video speed {s.speed_v} != audio speed {s.speed_a} (A/V desync)"
+        )
+    return s
+
+
+def _segment_context(
+    s: _Seg, info: MediaInfo, op_index: int, base: float, flags: dict
+) -> SegmentContext:
+    """The context for the next op, seeing the size/fps/speed tracked so far."""
+    has_v, has_a = info.video is not None, info.audio is not None
+    seg = s.seg
+    return SegmentContext(
+        index=s.index,
+        op_index=op_index,
+        start=seg.start,
+        end=seg.end,
+        source_start=info.to_source_seconds(seg.start),
+        source_end=info.to_source_seconds(seg.end),
+        info=info,
+        width=s.width,
+        height=s.height,
+        fps=s.fps,
+        sample_rate=info.audio.sample_rate if info.audio else None,
+        has_video=has_v,
+        has_audio=has_a,
+        speed=s.speed_v if has_v else s.speed_a,
+        clock_base=base,
+        flags=flags,
+    )
+
+
+def _route_node(s: _Seg, n: Node, *, has_v: bool, has_a: bool) -> None:
+    """Put a checked node on its stream's chain; nodes for an absent stream are ignored."""
+    if n.stream == "v" and has_v:
+        s.v_nodes.append(n)
+        if isinstance(n, FilterNode):
+            _track_video(s, n)
+    elif n.stream == "a" and has_a and isinstance(n, FilterNode):
+        s.a_nodes.append(n)
+        if n.name == "atempo":
+            s.speed_a *= n.params["tempo"]
 
 
 def _track_video(s: _Seg, n: FilterNode) -> None:
