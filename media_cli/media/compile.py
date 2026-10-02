@@ -460,42 +460,13 @@ def compile_editlist(el: E.EditList, info: MediaInfo, *, fast: bool = False) -> 
     src, dst = os.path.abspath(el.input), os.path.abspath(el.output)
     if fast:
         return _compile_fast(el, info, src, dst)
-    flags: dict = {}
-    segs = _build_segments(el, info, passthrough=False, flags=flags)
-    mode = "filter"
-    if _full_range(el, info) and _passthrough_ok(segs):
-        flags = {}
-        segs = _build_segments(el, info, passthrough=True, flags=flags)
-        mode = "passthrough" if _passthrough_ok(segs) else "filter"
-        if mode == "filter":  # an op changed its mind with the new clock; stay safe
-            flags = {}
-            segs = _build_segments(el, info, passthrough=False, flags=flags)
+    mode, segs, flags = _choose_mode(el, info)
     redacted = bool(flags.get("redacted"))
-    has_v, has_a = info.video is not None, info.audio is not None
-    if mode == "passthrough" and not segs[0].v_nodes and not redacted:
-        mode = "remux"
-
-    labels: dict[int, str] = {}
-    graph_text: str | None = None
+    has_v = info.video is not None
     durations = [s.duration(has_v) for s in segs]
     expected = sum(durations) - sum(t.duration for t in el.transitions)
-    touched: set[int] = set()
-    if mode == "filter":
-        graph_text, vout, aout = _filter_graph(el, info, segs, flags)
-        if has_v:
-            labels[info.video.index] = vout  # type: ignore[union-attr]
-        if has_a:
-            labels[info.audio.index] = aout  # type: ignore[union-attr]
-        touched = set(labels)
-    elif mode == "passthrough" and has_v:
-        g = _Graph()
-        chain = _Chain(g, f"[0:{info.video.index}]")  # type: ignore[union-attr]
-        for n in segs[0].v_nodes:
-            chain.add(n)
-        labels[info.video.index] = chain.end(_VOUT, "v")  # type: ignore[union-attr]
-        touched = set(labels)
-        graph_text = g.text()
-        _require(g.used)
+    graph_text, labels = _mode_graph(mode, el, info, segs, flags)
+    touched = set(labels)
 
     primary = {s.index for s in (info.video, info.audio) if s is not None}
     plan = output.plan_output(
@@ -525,6 +496,47 @@ def compile_editlist(el: E.EditList, info: MediaInfo, *, fast: bool = False) -> 
         segments=_seg_facts(el, info, durations),
         flags=flags,
     )
+
+
+def _choose_mode(el: E.EditList, info: MediaInfo) -> tuple[str, list[_Seg], dict]:
+    """Build the segments and pick ``filter``/``passthrough``/``remux`` (not ``fast``)."""
+    flags: dict = {}
+    segs = _build_segments(el, info, passthrough=False, flags=flags)
+    mode = "filter"
+    if _full_range(el, info) and _passthrough_ok(segs):
+        flags = {}
+        segs = _build_segments(el, info, passthrough=True, flags=flags)
+        mode = "passthrough" if _passthrough_ok(segs) else "filter"
+        if mode == "filter":  # an op changed its mind with the new clock; stay safe
+            flags = {}
+            segs = _build_segments(el, info, passthrough=False, flags=flags)
+    if mode == "passthrough" and not segs[0].v_nodes and not flags.get("redacted"):
+        mode = "remux"
+    return mode, segs, flags
+
+
+def _mode_graph(
+    mode: str, el: E.EditList, info: MediaInfo, segs: list[_Seg], flags: dict
+) -> tuple[str | None, dict[int, str]]:
+    """The filtergraph (or ``None``) and the output label of every stream it produces."""
+    labels: dict[int, str] = {}
+    if mode == "filter":
+        graph_text, vout, aout = _filter_graph(el, info, segs, flags)
+        if info.video is not None:
+            labels[info.video.index] = vout
+        if info.audio is not None:
+            labels[info.audio.index] = aout
+        return graph_text, labels
+    if mode == "passthrough" and info.video is not None:
+        g = _Graph()
+        chain = _Chain(g, f"[0:{info.video.index}]")
+        for n in segs[0].v_nodes:
+            chain.add(n)
+        labels[info.video.index] = chain.end(_VOUT, "v")
+        graph_text = g.text()
+        _require(g.used)
+        return graph_text, labels
+    return None, labels
 
 
 def _timing(plan: output.OutputPlan) -> list[str]:
