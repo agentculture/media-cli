@@ -554,28 +554,45 @@ def _segment_outputs(
     *,
     joined: bool,
 ) -> tuple[str, str]:
-    """Emit one segment's trimmed + re-based video and audio chains; return their labels."""
+    """Emit one segment's trimmed + re-based video then audio chain; return their labels."""
     v_label = a_label = ""
     if info.video is not None:
-        c = _Chain(g, f"[0:{info.video.index}]")
-        c.add(FilterNode("trim", {"start": s.trim_start, "end": s.trim_end}, "v"))
-        c.add(FilterNode("setpts", {"offset": s.trim_start}, "v"))
-        for n in s.v_nodes:
-            c.add(n)
-        if joined and (s.width, s.height) != target and target[0] and target[1]:
-            c.add(FilterNode("scale", {"w": target[0], "h": target[1]}, "v"))
-            c.add(FilterNode("setsar", {"sar": 1}, "v"))
-        if el.transitions:
-            c.add(FilterNode("fps", {"fps": fps}, "v"))
-        v_label = c.end(_VOUT if not joined else g.label("v"), "v")
+        v_label = _segment_video(g, el, info.video.index, s, target, fps, joined=joined)
     if info.audio is not None:
-        c = _Chain(g, f"[0:{info.audio.index}]")
-        c.add(FilterNode("atrim", {"start": s.trim_start, "end": s.trim_end}, "a"))
-        c.add(FilterNode("asetpts", {"offset": s.trim_start}, "a"))
-        for n in s.a_nodes:
-            c.add(n)
-        a_label = c.end(_AOUT if not joined else g.label("a"), "a")
+        a_label = _segment_audio(g, info.audio.index, s, joined=joined)
     return v_label, a_label
+
+
+def _segment_video(
+    g: _Graph,
+    el: E.EditList,
+    stream_index: int,
+    s: _Seg,
+    target: tuple[int | None, int | None],
+    fps: float,
+    *,
+    joined: bool,
+) -> str:
+    c = _Chain(g, f"[0:{stream_index}]")
+    c.add(FilterNode("trim", {"start": s.trim_start, "end": s.trim_end}, "v"))
+    c.add(FilterNode("setpts", {"offset": s.trim_start}, "v"))
+    for n in s.v_nodes:
+        c.add(n)
+    if joined and (s.width, s.height) != target and target[0] and target[1]:
+        c.add(FilterNode("scale", {"w": target[0], "h": target[1]}, "v"))
+        c.add(FilterNode("setsar", {"sar": 1}, "v"))
+    if el.transitions:
+        c.add(FilterNode("fps", {"fps": fps}, "v"))
+    return c.end(_VOUT if not joined else g.label("v"), "v")
+
+
+def _segment_audio(g: _Graph, stream_index: int, s: _Seg, *, joined: bool) -> str:
+    c = _Chain(g, f"[0:{stream_index}]")
+    c.add(FilterNode("atrim", {"start": s.trim_start, "end": s.trim_end}, "a"))
+    c.add(FilterNode("asetpts", {"offset": s.trim_start}, "a"))
+    for n in s.a_nodes:
+        c.add(n)
+    return c.end(_AOUT if not joined else g.label("a"), "a")
 
 
 def _join_transitions(
@@ -589,25 +606,12 @@ def _join_transitions(
     flags: dict,
 ) -> None:
     """Fold the segments left to right through each transition's xfade/acrossfade."""
-    has_v, has_a = info.video is not None, info.audio is not None
+    has_v = info.video is not None
     v_run, a_run = outs[0]
     left = segs[0].duration(has_v)
     for k, t in enumerate(el.transitions):
         right = segs[k + 1].duration(has_v)
-        ctx = JoinContext(
-            index=k,
-            left_duration=left,
-            right_duration=right,
-            offset=left - t.duration,
-            info=info,
-            has_video=has_v,
-            has_audio=has_a,
-            width=target[0],
-            height=target[1],
-            fps=fps if has_v else None,
-            sample_rate=info.audio.sample_rate if info.audio else None,
-            flags=flags,
-        )
+        ctx = _join_context(info, k, (left, right), t, target, fps, flags)
         where = f"transitions[{k}] ({t.type})"
         xf, ac = _join_nodes(TRANSITION_REGISTRY[t.type].build(t, ctx), ctx, where)
         last = k == len(el.transitions) - 1
@@ -618,6 +622,33 @@ def _join_transitions(
             a_run = _join_step(g, a_run + a_next, ac, _AOUT if last else g.label("ax"))
         overlap = xf.params["duration"] if xf is not None else ac.params["d"]  # type: ignore
         left = left + right - overlap
+
+
+def _join_context(
+    info: MediaInfo,
+    k: int,
+    durations: tuple[float, float],
+    t: E.Transition,
+    target: tuple[int | None, int | None],
+    fps: float,
+    flags: dict,
+) -> JoinContext:
+    has_v, has_a = info.video is not None, info.audio is not None
+    left, right = durations
+    return JoinContext(
+        index=k,
+        left_duration=left,
+        right_duration=right,
+        offset=left - t.duration,
+        info=info,
+        has_video=has_v,
+        has_audio=has_a,
+        width=target[0],
+        height=target[1],
+        fps=fps if has_v else None,
+        sample_rate=info.audio.sample_rate if info.audio else None,
+        flags=flags,
+    )
 
 
 def _join_step(g: _Graph, inputs: str, node: FilterNode, label: str) -> str:
