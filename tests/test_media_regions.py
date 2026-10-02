@@ -245,8 +245,9 @@ def test_bad_arguments(moving_square):
 
 def test_not_local_error_propagates(moving_square):
     err = MediaEnvError(ENV_SENSE_NOT_LOCAL, "remote", "")
+    client = FakeClient(lambda t: err)
     with pytest.raises(MediaEnvError) as ei:
-        regions.find_regions(moving_square, "x", client=FakeClient(lambda t: err))
+        regions.find_regions(moving_square, "x", client=client)
     assert ei.value.kind == ENV_SENSE_NOT_LOCAL
 
 

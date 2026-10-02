@@ -27,11 +27,15 @@ def _plan(tmp_path, *, overwrite: bool = False) -> out.OutputPlan:
 @pytest.mark.parametrize("exc", [RuntimeError, KeyboardInterrupt, SystemExit])
 def test_exception_in_block_leaves_no_dst_and_no_tmp(tmp_path, exc):
     plan = _plan(tmp_path)
-    with pytest.raises(exc):
+
+    def failing_write():
         with out.atomic_output(plan) as tmp:
             with open(tmp, "wb") as f:
                 f.write(b"partial")
             raise exc("boom")
+
+    with pytest.raises(exc):
+        failing_write()
     assert not os.path.exists(plan.dst)
     assert not os.path.exists(plan.tmp_path)
     assert sorted(os.listdir(tmp_path)) == ["src.mp4"]
