@@ -198,8 +198,10 @@ def test_transcribe_multipart(stub_factory, wav):
     method, path, body, headers = stub.posts[0]
     assert path == "/v1/audio/transcriptions"
     assert headers["Content-Type"].startswith("multipart/form-data; boundary=")
-    assert b'name="file"' in body and b"RIFFfakewav" in body
-    assert b'name="language"' in body and b"he" in body
+    assert b'name="file"' in body
+    assert b"RIFFfakewav" in body
+    assert b'name="language"' in body
+    assert b"he" in body
     # stt is checked for locality, not senses
     assert stub.log[0][:2] == ("GET", "/capabilities")
 
@@ -270,7 +272,8 @@ def test_429_then_200_retries(stub_factory, img):
     c = client_for(stub, sleep=sleeps.append)
     assert c.describe_images([img], "x") == "a red square"
     assert len(stub.posts) == 3
-    assert len(sleeps) == 2 and all(0 <= s <= senses.MAX_BACKOFF_SECONDS for s in sleeps)
+    assert len(sleeps) == 2
+    assert all(0 <= s <= senses.MAX_BACKOFF_SECONDS for s in sleeps)
 
 
 def test_retries_are_bounded(stub_factory, img):
@@ -284,16 +287,18 @@ def test_retries_are_bounded(stub_factory, img):
 
 def test_non_retryable_status_fails_fast(stub_factory, img):
     stub = stub_factory(RECORDED_CAPS, post_statuses=[401, 200])
+    c = client_for(stub)
     with pytest.raises(MediaEnvError) as ei:
-        client_for(stub).describe_images([img], "x")
+        c.describe_images([img], "x")
     assert ei.value.kind == ENV_SENSE_UNAVAILABLE
     assert len(stub.posts) == 1
 
 
 def test_missing_image_is_input_error_without_network(stub_factory, tmp_path):
     stub = stub_factory(RECORDED_CAPS)
+    c = client_for(stub)
     with pytest.raises(MediaInputError) as ei:
-        client_for(stub).describe_images([tmp_path / "nope.png"], "x")
+        c.describe_images([tmp_path / "nope.png"], "x")
     assert ei.value.kind == INPUT_UNREADABLE
     assert stub.log == []
 
@@ -329,7 +334,8 @@ def test_url_resolution_lobes_endpoint(monkeypatch):
     monkeypatch.setattr(senses.subprocess, "run", fake_run)
     assert senses.resolve_base_url("senses") == "http://lobes.example:9"
     assert seen["argv"] == ["/x/lobes", "endpoint", "senses", "--json"]
-    assert not seen["kw"].get("shell") and seen["kw"].get("timeout")
+    assert not seen["kw"].get("shell")
+    assert seen["kw"].get("timeout")
 
 
 @pytest.mark.parametrize("out", ["garbage", '{"endpoint": 5}', '{"endpoint": "ftp://x"}'])
