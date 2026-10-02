@@ -52,22 +52,30 @@ INPUT_OUTPUT_DIR_MISSING = "input.output_dir_missing"
 INPUT_CONTAINER_INCOMPATIBLE = "input.container_incompatible"
 INPUT_OUTPUT_CONTAINER_MISMATCH = "input.output_container_mismatch"
 
+_WEBM_EXT = ".webm"
+
 _EXT_CONTAINER = {
     ".mp4": "mp4",
     ".m4v": "mp4",
     ".mov": "mov",
     ".mkv": "matroska",
-    ".webm": "webm",
+    _WEBM_EXT: "webm",
     ".avi": "avi",
 }
 _CONTAINER_EXTS = {
     "mp4": (".mp4", ".m4v", ".m4a"),
     "mov": (".mov",),
     "matroska": (".mkv",),
-    "webm": (".webm",),
+    "webm": (_WEBM_EXT,),
     "avi": (".avi",),
 }
-_CONTAINER_EXT = {"mp4": ".mp4", "mov": ".mov", "matroska": ".mkv", "webm": ".webm", "avi": ".avi"}
+_CONTAINER_EXT = {
+    "mp4": ".mp4",
+    "mov": ".mov",
+    "matroska": ".mkv",
+    "webm": _WEBM_EXT,
+    "avi": ".avi",
+}
 
 _VIDEO_ENCODERS = {
     "h264": "libx264",
@@ -251,6 +259,44 @@ def _check_extension(dst: str, container: str | None) -> None:
     )
 
 
+def _decide_stream(s: probe.StreamInfo, touched: set[int], dropped: set[int]) -> StreamDecision:
+    """Drop, re-encode (touched audio/video) or stream-copy one source stream."""
+    if s.index in dropped:
+        return StreamDecision(s.index, s.type, "drop", None, None, "dropped")
+    if s.index in touched and s.type in ("video", "audio") and not s.attached_pic:
+        codec, enc, why = _encoder_for(s.type, s.codec)
+        return StreamDecision(s.index, s.type, "encode", codec, enc, why)
+    why = "untouched; stream-copied"
+    if s.index in touched:
+        why = "not re-renderable (cover art/subtitle/data); stream-copied"
+    return StreamDecision(s.index, s.type, "copy", s.codec, None, why)
+
+
+def _resolve_container(
+    container: str | None,
+    decisions: list[StreamDecision],
+    format_name: str,
+    dst_s: str,
+    allow_fallback: bool,
+) -> tuple[str, str | None, str]:
+    """Keep the source container, or fall back to matroska (``.mkv``) when it cannot carry
+    the kept streams; returns ``(container, fallback_reason, dst)``."""
+    kept = [d for d in decisions if d.action != "drop"]
+    bad = [d for d in kept if container and not _carries(container, d.type, d.codec)]
+    if container is not None and not bad:
+        return container, None, dst_s
+    what = ", ".join(f"{d.type}:{d.codec}" for d in bad) or f"format {format_name!r}"
+    reason = f"{container or 'source container'} cannot carry {what}; falling back to matroska"
+    if not allow_fallback:
+        raise MediaInputError(
+            INPUT_CONTAINER_INCOMPATIBLE,
+            reason.replace("falling back to matroska", "and fallback is disabled"),
+            "allow the matroska fallback or pick a container that carries these codecs",
+        )
+    root = os.path.splitext(dst_s)[0]
+    return "matroska", reason, root + ".mkv"
+
+
 def plan_output(
     src: str | os.PathLike,
     dst: str | os.PathLike,
@@ -268,34 +314,10 @@ def plan_output(
 
     container = _container_of(src_s, info.format_name)
     _check_extension(dst_s, container)
-    fallback: str | None = None
-    decisions: list[StreamDecision] = []
-    for s in info.streams:
-        if s.index in dropped:
-            decisions.append(StreamDecision(s.index, s.type, "drop", None, None, "dropped"))
-        elif s.index in touched and s.type in ("video", "audio") and not s.attached_pic:
-            codec, enc, why = _encoder_for(s.type, s.codec)
-            decisions.append(StreamDecision(s.index, s.type, "encode", codec, enc, why))
-        else:
-            why = "untouched; stream-copied"
-            if s.index in touched:
-                why = "not re-renderable (cover art/subtitle/data); stream-copied"
-            decisions.append(StreamDecision(s.index, s.type, "copy", s.codec, None, why))
-
-    kept = [d for d in decisions if d.action != "drop"]
-    bad = [d for d in kept if container and not _carries(container, d.type, d.codec)]
-    if container is None or bad:
-        what = ", ".join(f"{d.type}:{d.codec}" for d in bad) or f"format {info.format_name!r}"
-        reason = f"{container or 'source container'} cannot carry {what}; falling back to matroska"
-        if not allow_fallback:
-            raise MediaInputError(
-                INPUT_CONTAINER_INCOMPATIBLE,
-                reason.replace("falling back to matroska", "and fallback is disabled"),
-                "allow the matroska fallback or pick a container that carries these codecs",
-            )
-        container, fallback = "matroska", reason
-        root = os.path.splitext(dst_s)[0]
-        dst_s = root + ".mkv"
+    decisions = [_decide_stream(s, touched, dropped) for s in info.streams]
+    container, fallback, dst_s = _resolve_container(
+        container, decisions, info.format_name, dst_s, allow_fallback
+    )
     _check_dst(src_s, dst_s, overwrite)
 
     d = os.path.dirname(os.path.abspath(dst_s))
@@ -350,10 +372,18 @@ def commit(plan: OutputPlan) -> str:
 
 @contextlib.contextmanager
 def atomic_output(plan: OutputPlan) -> Iterator[str]:
-    """Yield ``tmp_path``; commit on success, discard on any exception."""
+    """Yield ``tmp_path``; commit on success, discard on any exception.
+
+    Exactly one of commit/discard always runs, including when the block is
+    left by an exception or the generator is closed early (``GeneratorExit``):
+    ``dst`` is complete or absent, never partial.
+    """
+    completed = False
     try:
         yield plan.tmp_path
-    except BaseException:
-        discard(plan)
-        raise
-    commit(plan)
+        completed = True
+    finally:
+        if completed:
+            commit(plan)
+        else:
+            discard(plan)

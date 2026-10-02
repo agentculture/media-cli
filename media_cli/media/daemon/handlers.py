@@ -68,7 +68,7 @@ def run_index(rec: JobRecord, store: JobStore, cancel_event: threading.Event) ->
     except CliError as exc:
         raise server.JobFailed(exc.message, kind=exc.kind or None) from exc
     sampling = doc["identity"]["sampling"]
-    _, directory = index._location(  # noqa: SLF001 - same package, one source of the layout
+    directory = index.index_dir(
         index.default_cache_dir(),
         doc["fingerprint"],
         {k: v for k, v in doc["identity"].items() if k != "served_model"},

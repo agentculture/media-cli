@@ -255,33 +255,8 @@ class JobStore:
     ) -> JobRecord:
         with self._lock:
             rec = self.get(job_id)
-            for key in changes:
-                if key not in _FIELD_NAMES or key in _IMMUTABLE:
-                    raise MediaInputError(
-                        INPUT_JOB_BAD_FIELD, f"cannot update job field {key!r}", ""
-                    )
-            new_state = changes.get("state")
-            if new_state is not None and new_state != rec.state:
-                allowed = _TRANSITIONS.get(rec.state, frozenset())
-                if new_state not in allowed and not (
-                    rec.state == "queued" and new_state in extra_ok
-                ):
-                    raise MediaInputError(
-                        INPUT_JOB_ILLEGAL_TRANSITION,
-                        f"illegal job transition {rec.state} -> {new_state}",
-                        f"legal from {rec.state}: {sorted(allowed) or 'none'}",
-                    )
-                now = time.time()
-                if new_state == "running":
-                    rec.timings["started"] = now
-                if new_state in TERMINAL_STATES:
-                    rec.timings["finished"] = now
-            elif new_state is not None and rec.state in TERMINAL_STATES:
-                raise MediaInputError(
-                    INPUT_JOB_ILLEGAL_TRANSITION,
-                    f"job already {rec.state}",
-                    "terminal states are final",
-                )
+            _check_updatable(changes)
+            _apply_transition(rec, changes.get("state"), extra_ok)
             for key, value in changes.items():
                 setattr(rec, key, value)
             self._write(rec)
@@ -289,9 +264,8 @@ class JobStore:
 
     def append_log(self, job_id: str, text: str) -> None:
         path = self.log_path(job_id)
-        with self._lock:
-            with open(path, "a", encoding="utf-8") as fh:
-                fh.write(text)
+        with self._lock, open(path, "a", encoding="utf-8") as fh:
+            fh.write(text)
 
     def mark_failed(self, job_id: str, stderr: str, message: str = "ffmpeg failed") -> JobRecord:
         """Fail a job, keeping the stderr tail and the full log path on the record."""
@@ -309,3 +283,33 @@ class JobStore:
             return self._update(
                 job_id, {"state": "failed", "error": error}, extra_ok=frozenset({"failed"})
             )
+
+
+def _check_updatable(changes: dict[str, Any]) -> None:
+    """Refuse unknown or immutable field names before anything is changed."""
+    for key in changes:
+        if key not in _FIELD_NAMES or key in _IMMUTABLE:
+            raise MediaInputError(INPUT_JOB_BAD_FIELD, f"cannot update job field {key!r}", "")
+
+
+def _apply_transition(rec: JobRecord, new_state: Any, extra_ok: frozenset[str]) -> None:
+    """Validate ``rec.state -> new_state`` and stamp the started/finished timings."""
+    if new_state is not None and new_state != rec.state:
+        allowed = _TRANSITIONS.get(rec.state, frozenset())
+        if new_state not in allowed and not (rec.state == "queued" and new_state in extra_ok):
+            raise MediaInputError(
+                INPUT_JOB_ILLEGAL_TRANSITION,
+                f"illegal job transition {rec.state} -> {new_state}",
+                f"legal from {rec.state}: {sorted(allowed) or 'none'}",
+            )
+        now = time.time()
+        if new_state == "running":
+            rec.timings["started"] = now
+        if new_state in TERMINAL_STATES:
+            rec.timings["finished"] = now
+    elif new_state is not None and rec.state in TERMINAL_STATES:
+        raise MediaInputError(
+            INPUT_JOB_ILLEGAL_TRANSITION,
+            f"job already {rec.state}",
+            "terminal states are final",
+        )

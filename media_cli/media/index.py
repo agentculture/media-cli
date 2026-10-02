@@ -144,6 +144,14 @@ def _location(root: str, fp: dict[str, Any], identity: dict[str, Any]) -> tuple[
     return _digest(fp), os.path.join(root, f"{_digest(fp)}-{_digest(identity)}")
 
 
+def index_dir(root: str, fp: dict[str, Any], identity: dict[str, Any]) -> str:
+    """The cache directory holding the index for ``fp`` under ``identity``.
+
+    The single source of the on-disk layout for callers outside this module.
+    """
+    return _location(root, fp, identity)[1]
+
+
 def _private_dir(path: str) -> None:
     os.makedirs(path, mode=0o700, exist_ok=True)
     os.chmod(path, 0o700)
@@ -308,6 +316,58 @@ def _evict(root: str, max_bytes: int, keep: str) -> None:
         total -= size
 
 
+def _dry_run_estimate(
+    src: str,
+    fps: float | None,
+    scene: float | None,
+    batch_size: int,
+    max_calls: int,
+    cached: dict[str, Any] | None,
+    ident: dict[str, Any],
+) -> dict[str, Any]:
+    """The dry-run report: frames, batches and sense calls a build would make."""
+    times = _plan_times(src, fps, scene)
+    batches = math.ceil(len(times) / batch_size)
+    calls = 0 if cached is not None else batches
+    _budget(len(times), calls, max_calls)
+    return {
+        "frames": len(times),
+        "batches": batches,
+        "sense_calls": calls,
+        "cap": max_calls,
+        "cached": cached is not None,
+        "identity": ident,
+    }
+
+
+def _caption_entries(
+    client: SensesClient,
+    role: str,
+    shots: list[dict[str, Any]],
+    batch_size: int,
+    prompt_version: str,
+    model: Any,
+    calls: _Calls,
+) -> list[dict[str, Any]]:
+    """Caption *shots* in batches and return one index entry per frame."""
+    entries: list[dict[str, Any]] = []
+    for i in range(0, len(shots), batch_size):
+        chunk = shots[i : i + batch_size]
+        caps = _caption_batch(client, role, [s["path"] for s in chunk], prompt_version, calls)
+        for shot, cap in zip(chunk, caps):
+            entries.append(
+                {
+                    "t": shot["t"],
+                    "frame_index": shot["frame_index"],
+                    "frame_path": os.path.join(FRAMES_DIR, os.path.basename(shot["path"])),
+                    "caption": cap,
+                    "model": model,
+                    "prompt_version": prompt_version,
+                }
+            )
+    return entries
+
+
 def build_index(
     path: str | os.PathLike,
     *,
@@ -333,18 +393,7 @@ def build_index(
     cached = _read_index(final)
 
     if dry_run:
-        times = _plan_times(src, fps, scene)
-        batches = math.ceil(len(times) / batch_size)
-        calls = 0 if cached is not None else batches
-        _budget(len(times), calls, max_calls)
-        return {
-            "frames": len(times),
-            "batches": batches,
-            "sense_calls": calls,
-            "cap": max_calls,
-            "cached": cached is not None,
-            "identity": ident,
-        }
+        return _dry_run_estimate(src, fps, scene, batch_size, max_calls, cached, ident)
 
     client = client or SensesClient()
     if cached is not None:
@@ -372,22 +421,8 @@ def build_index(
             max_frames=len(times),
             outdir_create=True,
         )
-        entries: list[dict[str, Any]] = []
         calls = _Calls(max_calls, batches)
-        for i in range(0, len(shots), batch_size):
-            chunk = shots[i : i + batch_size]
-            caps = _caption_batch(client, role, [s["path"] for s in chunk], prompt_version, calls)
-            for shot, cap in zip(chunk, caps):
-                entries.append(
-                    {
-                        "t": shot["t"],
-                        "frame_index": shot["frame_index"],
-                        "frame_path": os.path.join(FRAMES_DIR, os.path.basename(shot["path"])),
-                        "caption": cap,
-                        "model": model,
-                        "prompt_version": prompt_version,
-                    }
-                )
+        entries = _caption_entries(client, role, shots, batch_size, prompt_version, model, calls)
         doc = {
             "schema_version": SCHEMA_VERSION,
             "source": os.path.realpath(src),
