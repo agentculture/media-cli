@@ -225,7 +225,8 @@ def test_mkv_cut_and_redact_stays_mkv_opus_reencoded(e2e, media_mkv_vp8_opus):
     }
     plan, _, _ = run_edit(e2e, "mkv_cut", doc)
     actions = {s["type"]: s["action"] for s in plan["output"]["streams"]}
-    assert actions["audio"] == "encode" and actions["video"] == "encode"
+    assert actions["audio"] == "encode"
+    assert actions["video"] == "encode"
     info = ffprobe(out)
     assert "matroska" in info["format"]["format_name"]
     assert [s["codec_name"] for s in streams(info, "video")] == ["vp8"]
@@ -277,7 +278,8 @@ def test_submit_with_no_daemon_returns_job_id_fast(media_mp4, launcher):
     base = Path(tempfile.mkdtemp(prefix="e2f"))
     fresh = Env(base)
     try:
-        assert fresh.daemons() == [] and not fresh.sockdir.exists()
+        assert fresh.daemons() == []
+        assert not fresh.sockdir.exists()
         el = base / "e.json"
         el.write_text(
             json.dumps(
@@ -292,13 +294,16 @@ def test_submit_with_no_daemon_returns_job_id_fast(media_mp4, launcher):
         p = media(fresh, "edit", "apply", str(el), "--apply", "--json", cmd=cmd)
         wall = time.monotonic() - t0
         print(f"\nSUBMIT WALL ({launcher}, no daemon beforehand): {wall:.3f}s")
-        assert p.returncode == 0 and p.stderr == "", (p.stdout, p.stderr)
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        assert p.stderr == "", (p.stdout, p.stderr)
         job_id = json.loads(p.stdout)["job_id"]
-        assert job_id and fresh.daemons(), "submit should have spawned the daemon"
+        assert job_id, "submit should have spawned the daemon"
+        assert fresh.daemons(), "submit should have spawned the daemon"
         assert wall < SUBMIT_BUDGET_S, wall
         for verb in ("status", "result"):  # each is a single JSON document
             q = media(fresh, "job", verb, job_id, "--json", cmd=cmd, expect=0)
-            assert q.stderr == "" and isinstance(json.loads(q.stdout), dict)
+            assert q.stderr == ""
+            assert isinstance(json.loads(q.stdout), dict)
     finally:
         _kill_all(fresh)
         shutil.rmtree(base, ignore_errors=True)
@@ -315,7 +320,8 @@ def test_job_status_and_result_are_single_json_documents(e2e, media_mp4):
     status = mj(e2e, "job", "status", job_id)
     assert status["job"]["id"] == job_id or job_id in json.dumps(status)
     res = wait_result(e2e, job_id)
-    assert res["ready"] is True and res["output"].endswith("single.mp4")
+    assert res["ready"] is True
+    assert res["output"].endswith("single.mp4")
 
 
 def _assert_machine_error(p, code):
@@ -377,7 +383,8 @@ def test_distinct_machine_codes_for_corrupt_range_and_offframe(e2e, media_mp4):
         )
     )
     assert len(set(kinds)) == 3, kinds
-    assert not (e2e.work / "x1.mp4").exists() and not (e2e.work / "x3.mp4").exists()
+    assert not (e2e.work / "x1.mp4").exists()
+    assert not (e2e.work / "x3.mp4").exists()
 
 
 # ------------------------------------------------------------------ criterion 3
@@ -438,7 +445,9 @@ def test_pseudo_inputs_are_refused(e2e, pseudo):
         {"input": pseudo, "output": str(e2e.work / "p.mp4"), "segments": [{"start": 0, "end": 1}]},
     )
     p = media(e2e, "edit", "plan", el, "--json")
-    assert p.returncode == 1 and p.stdout == "" and "Traceback" not in p.stderr
+    assert p.returncode == 1
+    assert p.stdout == ""
+    assert "Traceback" not in p.stderr
     assert json.loads(p.stderr)["kind"].startswith("input.")
     assert not (e2e.work / "p.mp4").exists()
 
@@ -459,7 +468,8 @@ def test_compiled_args_have_exactly_one_file_input(e2e, media_mp4, media_with_ex
         idx = [i for i, a in enumerate(args) if a == "-i"]
         assert len(idx) == 1, args
         value = args[idx[0] + 1]
-        assert value == "file:" + str(src.resolve()) and Path(value[5:]).is_file()
+        assert value == "file:" + str(src.resolve())
+        assert Path(value[5:]).is_file()
         assert "lavfi" not in args
 
 
