@@ -7,6 +7,7 @@ checked by actually running ffmpeg on the lavfi fixtures.
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import json
 import math
@@ -177,7 +178,7 @@ def test_render_fixed_point_numbers_and_enable():
 
 def test_filter_node_is_frozen():
     node = FilterNode("crop", {"w": 10, "h": 10}, "v")
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         node.name = "movie"  # type: ignore[misc]
     with pytest.raises(TypeError):
         node.params["w"] = "x"  # type: ignore[index]
@@ -290,7 +291,8 @@ def test_op_modules_keep_the_build_signature(mod):
 
 def test_stub_error_helper_kind():
     err = ops.not_implemented(E.Crop(0, 0, 1, 1))
-    assert isinstance(err, MediaInputError) and err.kind == "input.op_not_implemented"
+    assert isinstance(err, MediaInputError)
+    assert err.kind == "input.op_not_implemented"
     assert "crop" in err.message
 
 
@@ -375,14 +377,16 @@ def test_ops_returning_forbidden_nodes_are_refused(media_mp4, tmp_path, monkeypa
 def test_argv_shape_and_job_spec(media_mp4, tmp_path):
     c = _compile(_doc(media_mp4, tmp_path / "o.mp4"))
     args = list(c.args)
-    assert args[0] == "-hide_banner" and "ffmpeg" not in args[0]
+    assert args[0] == "-hide_banner"
+    assert "ffmpeg" not in args[0]
     i = args.index("-i")
     assert args[i + 1] == "file:" + os.path.abspath(media_mp4)
     assert args[args.index("-filter_complex") + 1] == c.graph
     assert args[-1] == c.output_plan.tmp_path
     assert "-copyts" not in args
     assert c.mode == "filter"
-    assert "[0:0]trim=" in c.graph and "[0:1]atrim=" in c.graph
+    assert "[0:0]trim=" in c.graph
+    assert "[0:1]atrim=" in c.graph
     job = c.job_spec()
     assert job == {
         "kind": "ffmpeg",
@@ -394,10 +398,13 @@ def test_argv_shape_and_job_spec(media_mp4, tmp_path):
     assert os.path.isabs(job["output"])
     d = c.to_dict()
     json.dumps(d)
-    assert d["args"] == args and d["graph"] == c.graph and d["mode"] == "filter"
+    assert d["args"] == args
+    assert d["graph"] == c.graph
+    assert d["mode"] == "filter"
     assert d["expected_duration"] == pytest.approx(3.0)
     assert d["output"]["streams"][0]["action"] == "encode"
-    assert d["segments"][0]["start"] == 2 and d["segments"][0]["end"] == 5
+    assert d["segments"][0]["start"] == 2
+    assert d["segments"][0]["end"] == 5
 
 
 def _string_fields():
@@ -479,7 +486,8 @@ def test_fuzz_injection_into_every_string_field(field, payload, media_mp4, tmp_p
     )
     c = C.compile_editlist(el, info)
     graph = c.graph
-    assert value not in graph and os.path.basename(value) not in graph
+    assert value not in graph
+    assert os.path.basename(value) not in graph
     if payload not in ",;[=":  # single syntax chars are the graph's own syntax
         assert name not in graph
     assert "'" not in graph
@@ -487,7 +495,8 @@ def test_fuzz_injection_into_every_string_field(field, payload, media_mp4, tmp_p
         assert name not in graph
     # the path shows up only as whole argv elements (input, tmp output), never in the graph
     holders = [a for a in c.args if os.path.basename(value) in a]
-    assert holders and all(os.path.isabs(a.removeprefix("file:")) for a in holders)
+    assert holders
+    assert all(os.path.isabs(a.removeprefix("file:")) for a in holders)
 
 
 def test_graph_final_guard_rejects_denied_names(monkeypatch):
@@ -625,7 +634,8 @@ def test_speed_nodes_retime_and_track_duration(media_mp4, tmp_path, monkeypatch)
         True,
         True,
     )
-    assert second.source_start == pytest.approx(2.0) and second.source_end == pytest.approx(5.0)
+    assert second.source_start == pytest.approx(2.0)
+    assert second.source_end == pytest.approx(5.0)
     dst = _run(c)
     assert P.probe(dst).video.duration == pytest.approx(1.5, abs=0.05)
 
@@ -726,7 +736,8 @@ def test_branch_wires_split_copy_overlay_with_local_enable(media_mp4, tmp_path, 
         [{"start": 2, "end": 5, "ops": [{"op": "blur", "regions": [region], "strength": 3}]}],
     )
     c = _compile(doc)
-    assert "split=outputs=2" in c.graph and "overlay=x=100:y=60:enable=between(t\\,1" in c.graph
+    assert "split=outputs=2" in c.graph
+    assert "overlay=x=100:y=60:enable=between(t\\,1" in c.graph
     dst = _run(c)
     assert _mean_region(dst, tmp_path, 1.5, box) < 20  # inside the window: blacked
     assert _mean_region(dst, tmp_path, 0.5, box) > 40  # before it: untouched
@@ -761,7 +772,8 @@ def test_transitions_wired_through_compose(media_mp4, tmp_path, monkeypatch):
         (1, pytest.approx(3.5), pytest.approx(1.5), pytest.approx(3.25)),
     ]
     assert c.expected_duration == pytest.approx(4.75)
-    assert "xfade=transition=wipeleft" in c.graph and "concat" not in c.graph
+    assert "xfade=transition=wipeleft" in c.graph
+    assert "concat" not in c.graph
     dst = _run(c)
     info = P.probe(dst)
     assert info.video.duration == pytest.approx(4.75, abs=0.1)
@@ -844,7 +856,9 @@ def test_full_range_visual_op_copies_untouched_audio(media_vfr_offset, tmp_path,
 def test_full_range_without_ops_is_a_remux(media_mp4, tmp_path):
     info = P.probe(media_mp4)
     c = _compile(_doc(media_mp4, tmp_path / "r.mp4", [{"start": 0, "end": info.end}]))
-    assert c.mode == "remux" and c.graph is None and "-filter_complex" not in c.args
+    assert c.mode == "remux"
+    assert c.graph is None
+    assert "-filter_complex" not in c.args
     assert all(d.action == "copy" for d in c.output_plan.streams)
 
 
@@ -856,7 +870,8 @@ def test_extras_dropped_by_default_and_metadata_kept_when_not_redacted(media_wit
         if s.type == "subtitle" or s.attached_pic:
             assert acts[s.index] == "drop"
     assert "-map_metadata" not in c.args
-    assert c.to_dict()["metadata"] == "kept" and c.to_dict()["redacted"] is False
+    assert c.to_dict()["metadata"] == "kept"
+    assert c.to_dict()["redacted"] is False
 
 
 def _redacting_box(op, ctx):
@@ -888,7 +903,8 @@ def test_redacted_fails_closed_unless_kept(media_with_extras, tmp_path, monkeypa
     )
     c = _compile(doc)
     d = c.to_dict()
-    assert d["redacted"] is True and d["flags"]["redacted"] is True
+    assert d["redacted"] is True
+    assert d["flags"]["redacted"] is True
     acts = {s.index: s.action for s in c.output_plan.streams}
     assert acts[info.video.index] == "encode"
     dst = _run(c)
@@ -897,10 +913,15 @@ def test_redacted_fails_closed_unless_kept(media_with_extras, tmp_path, monkeypa
     has_pic = any(s.attached_pic for s in o.streams)
     title = o.tags.get("title")
     if keep:
-        assert has_sub and has_pic and title == "Fixture Title"
-        assert "-map_metadata" not in c.args and d["metadata"] == "kept"
+        assert has_sub
+        assert has_pic
+        assert title == "Fixture Title"
+        assert "-map_metadata" not in c.args
+        assert d["metadata"] == "kept"
     else:
-        assert not has_sub and not has_pic and title is None
+        assert not has_sub
+        assert not has_pic
+        assert title is None
         assert c.args[c.args.index("-map_metadata") + 1] == "-1"
         assert d["metadata"] == "dropped"
 
@@ -910,11 +931,13 @@ def test_redacted_fails_closed_unless_kept(media_with_extras, tmp_path, monkeypa
 
 def test_fast_on_keyframes_is_exact_stream_copy(media_red_square, tmp_path):
     c = _compile(_doc(media_red_square, tmp_path / "f.mp4"), fast=True)
-    assert c.mode == "fast" and c.graph is None
+    assert c.mode == "fast"
+    assert c.graph is None
     assert c.snapped == {"start": 2.0, "end": 5.0, "exact": True}
     assert all(d.action == "copy" for d in c.output_plan.streams)
     args = list(c.args)
-    assert args.index("-ss") < args.index("-i") and "-filter_complex" not in args
+    assert args.index("-ss") < args.index("-i")
+    assert "-filter_complex" not in args
     dst = _run(c)
     # stream-copy end is packet (DTS) accurate: may run a few frames past a keyframe end
     assert P.probe(dst).video.duration == pytest.approx(3.0, abs=0.15)
@@ -931,7 +954,8 @@ def test_fast_off_keyframes_reports_snapped_points(media_red_square, tmp_path):
 def test_fast_snaps_to_media_end_when_no_later_keyframe(media_mp4, tmp_path):
     info = P.probe(media_mp4)
     c = _compile(_doc(media_mp4, tmp_path / "f.mp4"), fast=True)
-    assert c.snapped["start"] == 0.0 and c.snapped["end"] == pytest.approx(info.end)
+    assert c.snapped["start"] == 0.0
+    assert c.snapped["end"] == pytest.approx(info.end)
     assert c.snapped["exact"] is False
     assert "-to" not in c.args
     dst = _run(c)
@@ -946,8 +970,9 @@ def test_fast_snaps_to_media_end_when_no_later_keyframe(media_mp4, tmp_path):
     ],
 )
 def test_fast_refused_for_non_plain_cuts(media_mp4, tmp_path, segments, extra):
+    doc = _doc(media_mp4, tmp_path / "f.mp4", segments, **extra)
     with pytest.raises(MediaInputError) as ei:
-        _compile(_doc(media_mp4, tmp_path / "f.mp4", segments, **extra), fast=True)
+        _compile(doc, fast=True)
     assert ei.value.kind == C.INPUT_FAST_UNSUPPORTED
 
 
@@ -971,10 +996,12 @@ def test_segment_context_is_frozen_with_shared_flags(media_mp4, tmp_path, monkey
     )
     c = _compile(doc)
     assert isinstance(ctxs[0], SegmentContext)
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         ctxs[0].width = 1  # type: ignore[misc]
-    assert ctxs[0].flags is ctxs[1].flags and c.flags["n"] == 2
-    assert ctxs[0].fps == pytest.approx(25.0) and ctxs[0].sample_rate == 44100
+    assert ctxs[0].flags is ctxs[1].flags
+    assert c.flags["n"] == 2
+    assert ctxs[0].fps == pytest.approx(25.0)
+    assert ctxs[0].sample_rate == 44100
     assert JoinContext.__dataclass_params__.frozen  # type: ignore[attr-defined]
     assert math.isclose(ctxs[1].start, 3.0)
 
@@ -1000,7 +1027,8 @@ def test_audio_only_cut_concat(tmp_path):
         timeout=60,
     )
     c = _compile(_doc(src, tmp_path / "o.m4a", [{"start": 1, "end": 2}, {"start": 3, "end": 4.5}]))
-    assert "concat=n=2:v=0:a=1" in c.graph and "[0:0]trim" not in c.graph
+    assert "concat=n=2:v=0:a=1" in c.graph
+    assert "[0:0]trim" not in c.graph
     assert c.expected_duration == pytest.approx(2.5)
     dst = _run(c)
     assert P.probe(dst).audio.duration == pytest.approx(2.5, abs=0.05)
