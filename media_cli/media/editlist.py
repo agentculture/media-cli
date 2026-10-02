@@ -73,7 +73,7 @@ from media_cli.media.errors import (
     INPUT_UNREADABLE,
     MediaInputError,
 )
-from media_cli.media.probe import EPSILON, MediaInfo
+from media_cli.media.probe import EPSILON, MediaInfo, StreamInfo
 
 INPUT_EDITLIST_INVALID = "input.editlist_invalid"
 
@@ -366,43 +366,62 @@ def parse(source: Any) -> EditList:
 # ---------------------------------------------------------------- validate
 
 
+def _blame_field(axis: str, pos: int, limit: int) -> str:
+    """Blame the origin if it is itself off-frame, else the extent."""
+    if pos < limit:
+        return axis
+    return "x" if axis == "w" else "y"
+
+
+def _check_region_extent(r: Region, rp: str, frame: tuple[int, int]) -> None:
+    fw, fh = frame
+    for axis, pos, size, limit in (("w", r.x, r.w, fw), ("h", r.y, r.h, fh)):
+        if pos + size > limit:
+            raise _region_err(
+                _join(rp, _blame_field(axis, pos, limit)),
+                f"region extends past the {limit}px frame ({pos} + {size})",
+            )
+
+
+def _check_region_window(r: Region, rp: str, seg: Segment) -> None:
+    lo = r.start if r.start is not None else seg.start
+    hi = r.end if r.end is not None else seg.end
+    if r.start is not None and r.start < seg.start - EPSILON:
+        raise _time_err(_join(rp, "start"), f"{r.start} is before the segment start {seg.start}")
+    if r.end is not None and r.end > seg.end + EPSILON:
+        raise _time_err(_join(rp, "end"), f"{r.end} is after the segment end {seg.end}")
+    if r.start is not None and r.end is not None and hi <= lo:
+        raise _time_err(_join(rp, "end"), "end must be greater than start")
+
+
 def _check_regions(
     regions: tuple[Region, ...], path: str, frame: tuple[int, int] | None, seg: Segment
 ) -> None:
     for i, r in enumerate(regions):
         rp = _join(path, i)
         if frame is not None:
-            fw, fh = frame
-            for axis, pos, size, limit in (("w", r.x, r.w, fw), ("h", r.y, r.h, fh)):
-                if pos + size > limit:
-                    # blame the origin if it is itself off-frame, else the extent
-                    field = ("x" if axis == "w" else "y") if pos >= limit else axis
-                    raise _region_err(
-                        _join(rp, field),
-                        f"region extends past the {limit}px frame ({pos} + {size})",
-                    )
-        lo = r.start if r.start is not None else seg.start
-        hi = r.end if r.end is not None else seg.end
-        if r.start is not None and r.start < seg.start - EPSILON:
-            raise _time_err(
-                _join(rp, "start"), f"{r.start} is before the segment start {seg.start}"
-            )
-        if r.end is not None and r.end > seg.end + EPSILON:
-            raise _time_err(_join(rp, "end"), f"{r.end} is after the segment end {seg.end}")
-        if r.start is not None and r.end is not None and hi <= lo:
-            raise _time_err(_join(rp, "end"), "end must be greater than start")
+            _check_region_extent(r, rp, frame)
+        _check_region_window(r, rp, seg)
+
+
+def _frame_size(video: StreamInfo | None) -> tuple[int, int] | None:
+    if video is None or not video.width or not video.height:
+        return None
+    return (video.width, video.height)
+
+
+def _check_crop(op: Crop, op_path: str, frame: tuple[int, int]) -> tuple[int, int]:
+    """Raise if *op* leaves *frame*; return the frame size after the crop."""
+    if op.x + op.w > frame[0]:
+        raise _region_err(_join(op_path, "w"), f"crop extends past the {frame[0]}px frame")
+    if op.y + op.h > frame[1]:
+        raise _region_err(_join(op_path, "h"), f"crop extends past the {frame[1]}px frame")
+    return (op.w, op.h)
 
 
 def _validate_ops(seg: Segment, path: str, info: MediaInfo) -> None:
     video = info.video
-    frame = (
-        None
-        if video is None or not video.width or not video.height
-        else (
-            video.width,
-            video.height,
-        )
-    )
+    frame = _frame_size(video)
     length = seg.end - seg.start
     for j, op in enumerate(seg.ops):
         op_path = _join(_join(path, "ops"), j)
@@ -410,11 +429,7 @@ def _validate_ops(seg: Segment, path: str, info: MediaInfo) -> None:
         if spatial and video is None:
             raise _invalid(op_path, f"'{op.op}' needs a video stream but the input has none")
         if isinstance(op, Crop) and frame is not None:
-            if op.x + op.w > frame[0]:
-                raise _region_err(_join(op_path, "w"), f"crop extends past the {frame[0]}px frame")
-            if op.y + op.h > frame[1]:
-                raise _region_err(_join(op_path, "h"), f"crop extends past the {frame[1]}px frame")
-            frame = (op.w, op.h)
+            frame = _check_crop(op, op_path, frame)
         elif isinstance(op, (Box, Blur)):
             _check_regions(op.regions, _join(op_path, "regions"), frame, seg)
         elif isinstance(op, Fade) and op.duration > length + EPSILON:
@@ -424,14 +439,8 @@ def _validate_ops(seg: Segment, path: str, info: MediaInfo) -> None:
             )
 
 
-def validate(editlist: EditList, info: MediaInfo) -> EditList:
-    """Check ``editlist`` against probe facts.  Pure: no I/O, no subprocess.
-
-    Returns the edit list to use.  A segment end at or up to one nominal frame interval
-    (``info.frame_interval``) past ``info.end`` -- the ``editable.end`` of ``media probe
-    --json`` -- is clamped to ``info.end``; ends further beyond raise.  Without a known
-    frame interval there is no slack beyond ``EPSILON``.
-    """
+def _clamp_ends(editlist: EditList, info: MediaInfo) -> EditList:
+    """Clamp segment ends within one frame interval past ``info.end`` to it (d12)."""
     end_limit = info.end
     slack = info.frame_interval or 0.0
     clamped = []
@@ -441,26 +450,28 @@ def validate(editlist: EditList, info: MediaInfo) -> EditList:
         clamped.append(seg)
     if tuple(clamped) != editlist.segments:
         editlist = replace(editlist, segments=tuple(clamped))
-    for i, seg in enumerate(editlist.segments):
-        path = f"segments[{i}]"
-        if seg.start < -EPSILON or seg.start > end_limit + EPSILON:
-            raise _time_err(
-                _join(path, "start"),
-                f"{seg.start}s is outside the media (0 to {end_limit:.3f}s)",
-            )
-        if seg.end > end_limit + EPSILON or seg.end < -EPSILON:
-            raise _time_err(
-                _join(path, "end"),
-                f"{seg.end}s is outside the media (0 to {end_limit:.3f}s; the editable end is "
-                f"{end_limit:.3f}s, `media probe <file> --json` -> editable.end)",
-                "read editable.end from `media probe <file> --json` and use an end "
-                "at or below it (within one frame past it is clamped)",
-            )
-        if seg.end <= seg.start:
-            raise _time_err(
-                _join(path, "end"), f"end {seg.end} must be greater than start {seg.start}"
-            )
-        _validate_ops(seg, path, info)
+    return editlist
+
+
+def _check_segment_bounds(seg: Segment, path: str, end_limit: float) -> None:
+    if seg.start < -EPSILON or seg.start > end_limit + EPSILON:
+        raise _time_err(
+            _join(path, "start"),
+            f"{seg.start}s is outside the media (0 to {end_limit:.3f}s)",
+        )
+    if seg.end > end_limit + EPSILON or seg.end < -EPSILON:
+        raise _time_err(
+            _join(path, "end"),
+            f"{seg.end}s is outside the media (0 to {end_limit:.3f}s; the editable end is "
+            f"{end_limit:.3f}s, `media probe <file> --json` -> editable.end)",
+            "read editable.end from `media probe <file> --json` and use an end "
+            "at or below it (within one frame past it is clamped)",
+        )
+    if seg.end <= seg.start:
+        raise _time_err(_join(path, "end"), f"end {seg.end} must be greater than start {seg.start}")
+
+
+def _check_transitions(editlist: EditList) -> None:
     segs = editlist.segments
     if len(editlist.transitions) not in (0, max(len(segs) - 1, 0)):
         raise _invalid("transitions", f"expected 0 or {len(segs) - 1} transitions")
@@ -472,6 +483,22 @@ def validate(editlist: EditList, info: MediaInfo) -> EditList:
                 f"{t.duration}s must be shorter than both adjacent segments "
                 f"(shortest {shortest:.3f}s)",
             )
+
+
+def validate(editlist: EditList, info: MediaInfo) -> EditList:
+    """Check ``editlist`` against probe facts.  Pure: no I/O, no subprocess.
+
+    Returns the edit list to use.  A segment end at or up to one nominal frame interval
+    (``info.frame_interval``) past ``info.end`` -- the ``editable.end`` of ``media probe
+    --json`` -- is clamped to ``info.end``; ends further beyond raise.  Without a known
+    frame interval there is no slack beyond ``EPSILON``.
+    """
+    editlist = _clamp_ends(editlist, info)
+    for i, seg in enumerate(editlist.segments):
+        path = f"segments[{i}]"
+        _check_segment_bounds(seg, path, info.end)
+        _validate_ops(seg, path, info)
+    _check_transitions(editlist)
     return editlist
 
 
