@@ -129,7 +129,9 @@ def test_red_square_present_only_between_4_and_6s(media_red_square):
         return raw[0], raw[1], raw[2]
 
     r, g, b = pixel(5.0)
-    assert r > 200 and g < 60 and b < 60
+    assert r > 200
+    assert g < 60
+    assert b < 60
     for t in (2.0, 8.0):
         r, g, b = pixel(t)
         assert not (r > 200 and g < 60 and b < 60)

@@ -53,7 +53,8 @@ def runtime_dir(tmp_path, monkeypatch):
 def test_probe_json(media_mp4, runtime_dir, capsys):
     before = sha(media_mp4)
     rc, out, err = run(["probe", str(media_mp4), "--json"], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
     assert doc["video"]["codec"] == "h264"
     assert doc["audio"] is not None
@@ -63,20 +64,25 @@ def test_probe_json(media_mp4, runtime_dir, capsys):
 
 def test_probe_text_summary(media_mp4, capsys):
     rc, out, err = run(["probe", str(media_mp4)], capsys)
-    assert rc == 0 and err == ""
-    assert "video" in out and not out.lstrip().startswith("{")
+    assert rc == 0
+    assert err == ""
+    assert "video" in out
+    assert not out.lstrip().startswith("{")
 
 
 def test_probe_missing_file(tmp_path, capsys):
     rc, out, err = run(["probe", str(tmp_path / "nope.mp4"), "--json"], capsys)
-    assert rc == 1 and out == ""
+    assert rc == 1
+    assert out == ""
     assert json.loads(err)["kind"] == "input.unreadable"
     assert "Traceback" not in err
 
 
 def test_probe_text_error_has_hint(tmp_path, capsys):
     rc, out, err = run(["probe", str(tmp_path / "nope.mp4")], capsys)
-    assert rc == 1 and err.startswith("error:") and "hint:" in err
+    assert rc == 1
+    assert err.startswith("error:")
+    assert "hint:" in err
 
 
 def test_frames_at(media_mp4, tmp_path, runtime_dir, capsys):
@@ -85,10 +91,13 @@ def test_frames_at(media_mp4, tmp_path, runtime_dir, capsys):
     rc, out, err = run(
         ["frames", str(media_mp4), "--at", "1", "2.5", "--out", str(out_dir), "--json"], capsys
     )
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
-    assert doc["count"] == 2 and len(doc["frames"]) == 2
-    assert doc["sheet"] is None and doc["describe"] is None
+    assert doc["count"] == 2
+    assert len(doc["frames"]) == 2
+    assert doc["sheet"] is None
+    assert doc["describe"] is None
     for f in doc["frames"]:
         assert open(f["path"], "rb").read(8) == PNG
         assert os.path.dirname(f["path"]) == str(out_dir)
@@ -101,7 +110,8 @@ def test_frames_every_with_sheet(media_mp4, tmp_path, capsys):
         ["frames", str(media_mp4), "--every", "5", "--out", str(tmp_path), "--sheet", "--json"],
         capsys,
     )
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
     assert doc["count"] == 2
     assert open(doc["sheet"], "rb").read(8) == PNG
@@ -112,21 +122,25 @@ def test_frames_scene(media_red_square, tmp_path, capsys):
         ["frames", str(media_red_square), "--scene", "0.01", "--out", str(tmp_path), "--json"],
         capsys,
     )
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     assert json.loads(out)["count"] >= 1
 
 
 def test_frames_text_summary(media_mp4, tmp_path, capsys):
     rc, out, err = run(["frames", str(media_mp4), "--at", "1", "--out", str(tmp_path)], capsys)
-    assert rc == 0 and err == ""
-    assert "1 frame" in out and not out.lstrip().startswith("{")
+    assert rc == 0
+    assert err == ""
+    assert "1 frame" in out
+    assert not out.lstrip().startswith("{")
 
 
 def test_frames_overwrite(media_mp4, tmp_path, capsys):
     argv = ["frames", str(media_mp4), "--at", "1", "--out", str(tmp_path), "--json"]
     assert run(argv, capsys)[0] == 0
     rc, out, err = run(argv, capsys)
-    assert rc == 1 and json.loads(err)["kind"] == "input.output_exists"
+    assert rc == 1
+    assert json.loads(err)["kind"] == "input.output_exists"
     assert run([*argv, "--overwrite"], capsys)[0] == 0
 
 
@@ -134,7 +148,8 @@ def test_frames_out_of_range(media_mp4, tmp_path, capsys):
     rc, out, err = run(
         ["frames", str(media_mp4), "--at", "999", "--out", str(tmp_path), "--json"], capsys
     )
-    assert rc == 1 and out == ""
+    assert rc == 1
+    assert out == ""
     assert json.loads(err)["kind"] == "input.timestamp_out_of_range"
     assert "Traceback" not in err
 
@@ -143,15 +158,19 @@ def test_frames_bad_file(tmp_path, capsys):
     rc, out, err = run(
         ["frames", str(tmp_path / "x.mp4"), "--at", "1", "--out", str(tmp_path), "--json"], capsys
     )
-    assert rc == 1 and json.loads(err)["kind"] == "input.unreadable"
+    assert rc == 1
+    assert json.loads(err)["kind"] == "input.unreadable"
 
 
 def test_frames_needs_exactly_one_selector(media_mp4, tmp_path, capsys):
     base = ["frames", str(media_mp4), "--out", str(tmp_path), "--json"]
     rc, out, err = run(base, capsys)
-    assert rc == 1 and out == "" and "Traceback" not in err
+    assert rc == 1
+    assert out == ""
+    assert "Traceback" not in err
     rc, out, err = run([*base, "--at", "1", "--every", "2"], capsys)
-    assert rc == 1 and out == ""
+    assert rc == 1
+    assert out == ""
 
 
 def test_frames_describe_ok(media_mp4, tmp_path, monkeypatch, capsys):
@@ -174,7 +193,8 @@ def test_frames_describe_ok(media_mp4, tmp_path, monkeypatch, capsys):
         )
     finally:
         stub.close()
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
     assert doc["describe"]["ok"] is True
     descs = doc["describe"]["descriptions"]
@@ -188,7 +208,8 @@ def test_frames_describe_fail_soft(media_mp4, tmp_path, monkeypatch, capsys):
         ["frames", str(media_mp4), "--at", "1", "--out", str(tmp_path), "--describe", "--json"],
         capsys,
     )
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
     assert doc["count"] == 1
     assert doc["describe"]["ok"] is False
@@ -208,7 +229,8 @@ def test_frames_describe_not_local(media_mp4, tmp_path, monkeypatch, capsys):
         )
     finally:
         stub.close()
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     assert json.loads(out)["describe"]["kind"] == "env.sense_not_local"
 
 

@@ -58,7 +58,8 @@ def test_cli_overview_lists_new_verbs_and_dry_run_rule(capsys) -> None:
     for verb in ("probe", "frames", "edit", "search", "job"):
         assert f"{verb} " in verbs, verb
     conventions = " ".join(_section(payload, "Conventions"))
-    assert "--apply" in conventions and "daemon" in conventions
+    assert "--apply" in conventions
+    assert "daemon" in conventions
 
 
 def test_overview_graceful_on_bad_path(capsys: pytest.CaptureFixture[str]) -> None:

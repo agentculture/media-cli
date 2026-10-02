@@ -104,36 +104,49 @@ def test_edit_plan_prints_plan_and_writes_nothing(env, media_mp4, capsys):
     el = editlist(env, media_mp4)
     before, src = snapshot(env.base), sha(media_mp4)
     rc, out, err = run(["edit", "plan", str(el), "--json"], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
-    assert doc["args"] and doc["output"]["dst"].endswith("out.mp4")
-    assert "flags" in doc and "segments" in doc and doc["dry_run"] is True
-    assert snapshot(env.base) == before and sha(media_mp4) == src
-    assert env.daemons() == [] and not env.sockdir.exists()
+    assert doc["args"]
+    assert doc["output"]["dst"].endswith("out.mp4")
+    assert "flags" in doc
+    assert "segments" in doc
+    assert doc["dry_run"] is True
+    assert snapshot(env.base) == before
+    assert sha(media_mp4) == src
+    assert env.daemons() == []
+    assert not env.sockdir.exists()
 
 
 def test_edit_apply_without_apply_behaves_like_plan(env, media_mp4, capsys):
     el = editlist(env, media_mp4)
     before = snapshot(env.base)
     rc, out, err = run(["edit", "apply", str(el), "--json"], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
-    assert doc["dry_run"] is True and "job_id" not in doc
+    assert doc["dry_run"] is True
+    assert "job_id" not in doc
     assert snapshot(env.base) == before
-    assert env.daemons() == [] and not env.sockdir.exists()
+    assert env.daemons() == []
+    assert not env.sockdir.exists()
 
 
 def test_edit_plan_text_mode(env, media_mp4, capsys):
     rc, out, err = run(["edit", "plan", str(editlist(env, media_mp4))], capsys)
-    assert rc == 0 and err == "" and not out.lstrip().startswith("{")
-    assert "out.mp4" in out and "dry run" in out.lower()
+    assert rc == 0
+    assert err == ""
+    assert not out.lstrip().startswith("{")
+    assert "out.mp4" in out
+    assert "dry run" in out.lower()
 
 
 def test_edit_output_extension_mismatch_fails_at_plan_time(env, media_mp4, capsys):
     el = editlist(env, media_mp4, name="out.mkv")
     before = snapshot(env.base)
     rc, out, err = run(["edit", "plan", str(el), "--json"], capsys)
-    assert rc == 1 and out == ""
+    assert rc == 1
+    assert out == ""
     assert json.loads(err)["kind"] == "input.output_container_mismatch"
     assert snapshot(env.base) == before
 
@@ -142,26 +155,32 @@ def test_search_index_dry_run_estimate_writes_nothing(env, media_mp4, capsys, mo
     monkeypatch.setenv("MEDIA_CLI_LOBES_URL", "http://127.0.0.1:9")
     before, src = snapshot(env.base), sha(media_mp4)
     rc, out, err = run(["search", "index", str(media_mp4), "--fps", "1", "--json"], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
     for key in ("frames", "batches", "sense_calls", "cap", "cached"):
         assert key in doc
-    assert snapshot(env.base) == before and sha(media_mp4) == src
-    assert env.daemons() == [] and not env.sockdir.exists()
+    assert snapshot(env.base) == before
+    assert sha(media_mp4) == src
+    assert env.daemons() == []
+    assert not env.sockdir.exists()
 
 
 def test_search_purge_dry_run_lists_and_removes_nothing(env, media_mp4, capsys):
     before = snapshot(env.base)
     rc, out, err = run(["search", "purge", str(media_mp4), "--json"], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
-    assert doc["dry_run"] is True and "indexes" in doc["would_remove"]
+    assert doc["dry_run"] is True
+    assert "indexes" in doc["would_remove"]
     assert snapshot(env.base) == before
 
 
 def test_search_cache_reports(env, media_mp4, capsys):
     rc, out, err = run(["search", "cache", "--json"], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     assert json.loads(out)["indexes"] == []
 
 
@@ -172,15 +191,19 @@ def test_edit_apply_runs_a_job_and_keeps_source(env, media_mp4, capsys):
     el = editlist(env, media_mp4)
     src = sha(media_mp4)
     rc, out, err = run(["edit", "apply", str(el), "--apply", "--json"], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
-    assert doc["job_id"] and doc["output"].endswith("out.mp4") and doc["plan"]["args"]
+    assert doc["job_id"]
+    assert doc["output"].endswith("out.mp4")
+    assert doc["plan"]["args"]
     res = wait_done(capsys, doc["job_id"])
     assert res["job"]["state"] == "done", res
     assert (env.work / "out.mp4").exists()
     assert sha(media_mp4) == src
     rc, out, _ = run(["job", "status", doc["job_id"], "--json"], capsys)
-    assert rc == 0 and json.loads(out)["job"]["id"] == doc["job_id"]
+    assert rc == 0
+    assert json.loads(out)["job"]["id"] == doc["job_id"]
     rc, out, _ = run(["job", "list", "--json"], capsys)
     assert doc["job_id"] in [j["id"] for j in json.loads(out)["jobs"]]
 
@@ -243,14 +266,16 @@ def stub(monkeypatch):
 def test_search_index_apply_then_query(env, stub, media_mp4, capsys):
     src = sha(media_mp4)
     rc, out, err = run(["search", "query", str(media_mp4), "a red car", "--json"], capsys)
-    assert rc == 1 and json.loads(err)["kind"] == "input.index_missing"
+    assert rc == 1
+    assert json.loads(err)["kind"] == "input.index_missing"
     assert "media search index" in json.loads(err)["remediation"]
     assert stub.requests == 0
 
     rc, out, err = run(
         ["search", "index", str(media_mp4), "--fps", "0.5", "--apply", "--json"], capsys
     )
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     doc = json.loads(out)
     assert doc["job_id"]
     res = wait_done(capsys, doc["job_id"])
@@ -260,13 +285,15 @@ def test_search_index_apply_then_query(env, stub, media_mp4, capsys):
     rc, out, err = run(["search", "query", str(media_mp4), "a red car", "--json"], capsys)
     assert rc == 0, err
     q = json.loads(out)
-    assert q["hits"] and q["modality"] == "frames"
+    assert q["hits"]
+    assert q["modality"] == "frames"
     assert sha(media_mp4) == src
 
     rc, out, _ = run(["search", "cache", str(media_mp4), "--json"], capsys)
     assert len(json.loads(out)["indexes"]) == 1
     rc, out, _ = run(["search", "purge", str(media_mp4), "--apply", "--json"], capsys)
-    assert rc == 0 and json.loads(out)["removed"]["indexes"] == 1
+    assert rc == 0
+    assert json.loads(out)["removed"]["indexes"] == 1
     rc, out, _ = run(["search", "cache", str(media_mp4), "--json"], capsys)
     assert json.loads(out)["indexes"] == []
 
@@ -287,10 +314,12 @@ def test_search_index_budget_exceeded_makes_no_requests(env, stub, media_mp4, ca
             ],
             capsys,
         )
-        assert rc == 1 and out == ""
+        assert rc == 1
+        assert out == ""
         assert json.loads(err)["kind"] == "input.budget_exceeded"
     assert stub.requests == 0
-    assert env.daemons() == [] and not env.sockdir.exists()
+    assert env.daemons() == []
+    assert not env.sockdir.exists()
 
 
 # ---------------------------------------------------------------- job + overview + parse errors
@@ -299,24 +328,31 @@ def test_search_index_budget_exceeded_makes_no_requests(env, stub, media_mp4, ca
 def test_job_status_unknown_id(env, capsys):
     for verb in ("status", "result", "cancel"):
         rc, out, err = run(["job", verb, "nope", "--json"], capsys)
-        assert rc == 1 and out == ""
+        assert rc == 1
+        assert out == ""
         assert json.loads(err)["kind"] == "input.job_not_found"
-    assert env.daemons() == [] and not env.sockdir.exists()
+    assert env.daemons() == []
+    assert not env.sockdir.exists()
 
 
 def test_job_list_empty_never_spawns(env, capsys):
     rc, out, err = run(["job", "list", "--json"], capsys)
-    assert rc == 0 and json.loads(out)["jobs"] == []
-    assert env.daemons() == [] and not env.sockdir.exists()
+    assert rc == 0
+    assert json.loads(out)["jobs"] == []
+    assert env.daemons() == []
+    assert not env.sockdir.exists()
 
 
 @pytest.mark.parametrize("noun", ["edit", "search", "job"])
 def test_noun_overview(noun, capsys):
     rc, out, err = run([noun, "overview", "--json"], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert err == ""
     assert json.loads(out)["subject"].endswith(noun)
     rc, out, err = run([noun, "overview"], capsys)
-    assert rc == 0 and err == "" and noun in out
+    assert rc == 0
+    assert err == ""
+    assert noun in out
 
 
 @pytest.mark.parametrize(
@@ -332,7 +368,9 @@ def test_noun_overview(noun, capsys):
 )
 def test_parse_errors_are_structured(argv, capsys):
     rc, out, err = run(argv, capsys)
-    assert rc == 1 and out == "" and err.strip()
+    assert rc == 1
+    assert out == ""
+    assert err.strip()
     assert "Traceback" not in err
 
 
@@ -341,6 +379,7 @@ def test_edit_regions_fail_closed_and_leaves_no_files(env, media_mp4, capsys, mo
     monkeypatch.setenv("TMPDIR", str(env.work))
     before = snapshot(env.base)
     rc, out, err = run(["edit", "regions", str(media_mp4), "the logo", "--json"], capsys)
-    assert rc == 2 and out == ""
+    assert rc == 2
+    assert out == ""
     assert json.loads(err)["kind"].startswith("env.sense")
     assert snapshot(env.base) == before
