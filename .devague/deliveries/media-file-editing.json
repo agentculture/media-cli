@@ -2,7 +2,7 @@
   "plan_slug": "media-file-editing",
   "schema_version": 2,
   "created": "2026-09-30T19:58:53Z",
-  "updated": "2026-10-01T08:10:01Z",
+  "updated": "2026-10-02T16:11:55Z",
   "deviations": [
     {
       "id": "d1",
@@ -219,7 +219,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 13
     },
@@ -238,7 +238,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 14
     },
@@ -257,7 +257,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 15
     },
@@ -276,7 +276,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 16
     },
@@ -295,7 +295,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 17
     },
@@ -314,7 +314,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 18
     },
@@ -333,7 +333,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 19
     },
@@ -352,7 +352,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 20
     },
@@ -371,7 +371,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 21
     },
@@ -390,7 +390,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 22
     },
@@ -409,7 +409,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 23
     },
@@ -428,7 +428,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 24
     },
@@ -447,7 +447,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 25
     },
@@ -466,7 +466,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 26
     },
@@ -485,7 +485,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 27
     },
@@ -504,7 +504,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 28
     },
@@ -523,7 +523,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 29
     },
@@ -542,7 +542,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 30
     },
@@ -561,7 +561,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 31
     },
@@ -580,7 +580,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": true,
       "seq": 32
     },
@@ -599,7 +599,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 33
     },
@@ -618,7 +618,7 @@
         "commit": "8dc0e07"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 34
     },
@@ -637,7 +637,7 @@
         "commit": "49d5021"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 36
     },
@@ -656,7 +656,7 @@
         "commit": "49d5021"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 37
     },
@@ -693,7 +693,7 @@
         "e3"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -707,7 +707,7 @@
         "e18"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -721,7 +721,7 @@
         "e9"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -735,7 +735,7 @@
         "e5"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -749,7 +749,7 @@
         "e11"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -761,7 +761,7 @@
       ],
       "evidence_refs": [],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -776,7 +776,7 @@
         "e9"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -788,7 +788,7 @@
       ],
       "evidence_refs": [],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -802,7 +802,7 @@
         "e17"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -816,7 +816,7 @@
         "e18"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -832,7 +832,7 @@
         "e10"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -846,7 +846,7 @@
         "e20"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": true
     },
     {
@@ -858,7 +858,7 @@
       ],
       "evidence_refs": [],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": true
     },
     {
@@ -873,7 +873,7 @@
         "e23"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -888,7 +888,7 @@
         "e24"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     }
   ],

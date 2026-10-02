@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-30T19:12:03Z",
-  "updated": "2026-10-02T15:08:03Z",
+  "updated": "2026-10-02T16:11:56Z",
   "claims": [
     {
       "id": "c1",
@@ -1381,7 +1381,7 @@
         "t1"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l4",
@@ -1394,7 +1394,7 @@
         "o14"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l5",
@@ -1405,7 +1405,7 @@
         "t7"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l6",
@@ -1417,7 +1417,7 @@
         "o15"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l7",
@@ -1429,7 +1429,7 @@
         "d2"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l8",
@@ -1441,7 +1441,7 @@
         "t19"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l9",
@@ -1453,7 +1453,7 @@
         "c45"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l10",
@@ -1464,7 +1464,7 @@
         "d11"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l11",
@@ -1475,7 +1475,7 @@
         "t24"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l12",
@@ -1488,7 +1488,7 @@
         "c37"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l13",
@@ -1499,7 +1499,7 @@
         "d13"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l14",
@@ -1511,7 +1511,7 @@
         "h3"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l15",
@@ -1522,7 +1522,7 @@
         "sonar/t-cli"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "l16",
@@ -1533,7 +1533,7 @@
         "sonar/t-daemon"
       ],
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     }
   ],
   "obligations": [
@@ -1544,7 +1544,7 @@
       "behavior": "probe duration within 0.1s; a 2-5s cut is 3.0s +/- 0.1; a black box leaves the region mean < 5",
       "source_text": "On a lavfi-generated 10s fixture: 'media probe' returns duration within 0.1s and every stream as JSON; a cut from 2.0s-5.0s yields an output whose ffprobe duration is 3.0s +/- 0.1s; a black-box redact leaves the region's mean pixel value < 5 while outside the box is unchanged \u2014 all in CI with ffmpeg present, and skipped cleanly (not failed) without it",
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "o2",
@@ -1553,7 +1553,7 @@
       "behavior": "a query for 'a red square' against the red-square fixture returns a range overlapping 4.0-6.0s; with no gateway reachable it fails with env.sense_unavailable, not a traceback",
       "source_text": "A semantic query ('frames with a red square') against a fixture with a red square inserted at 4.0s-6.0s returns a range overlapping 4.0-6.0s via senses on a live gateway, and returns a typed exit-2 'sense unavailable' error (not a traceback, not an empty result) when no gateway is reachable",
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     },
     {
       "id": "o3",
@@ -1562,7 +1562,7 @@
       "behavior": "submit returns a job id in < 1s; status/result are single JSON documents; rubric stays at zero failures",
       "source_text": "submit returns a job id in < 1s with no daemon running beforehand (on-demand spawn over the unix socket); status/result for that id return a single JSON document each; the teken rubric gate stays 100% (26+/26+) with the new nouns",
       "origin": "llm",
-      "status": "proposed"
+      "status": "approved"
     }
   ]
 }

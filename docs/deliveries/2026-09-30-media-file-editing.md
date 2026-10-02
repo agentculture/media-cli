@@ -178,7 +178,7 @@ All checks below are read-only re-runs on branch `spec/media-file-editing`.
   - Search on the 37-minute file: a dry run at fps 0.5 plans 139 calls; at fps 4 it is refused (`input.budget_exceeded`, 1108 > 600) before any request.
   - An over-long `XDG_RUNTIME_DIR` gives `env.socket_path_too_long` with a hint, no spawn and no files.
   - While the senses backend refused connections, the gateway returned 503 and media-cli failed with `env.sense_unavailable`, no traceback.
-- **Ledger** (all `--origin llm`, so all **proposed**, pending adjudication by the gate owner):
+- **Ledger** (filed `--origin llm`; the gate owner confirmed every proposed record on 2026-10-02):
   - Evidence `e1`–`e24`; `e20` (c36 live fail) is superseded by `e23`.
   - Deltas `b1`–`b15`; `b12`/`b13` are superseded by `b14`/`b15`.
   - Read them back with `devague evidence --list` and `devague delta --list`.
@@ -188,8 +188,8 @@ All checks below are read-only re-runs on branch `spec/media-file-editing`.
 ## Delivery Claims
 
 Evidence pointers are test node ids that ran green at `49d5021` unless stated
-otherwise. Confidence is capped by approved lapses `l1`/`l2`; proposed lapses
-`l3`–`l13` are pending and are not cited as evidence.
+otherwise. Confidence is capped by the approved lapses `l1`–`l16`, all confirmed
+by the gate owner on 2026-10-02.
 
 | Claim | Confidence | Evidence |
 |-------|------------|----------|
@@ -209,8 +209,8 @@ otherwise. Confidence is capped by approved lapses `l1`/`l2`; proposed lapses
 | Dry run changes nothing; `--apply` never touches the source (`c13`/`h10`, `o16`) | high | `tests/test_cli_media_write.py::test_edit_plan_prints_plan_and_writes_nothing`, `::test_edit_apply_runs_a_job_and_keeps_source`; live sha unchanged |
 | Jobs are submitted and polled; submit with no daemon returns in under 1 s (`c21`/`c27`/`c28`/`c37`) | high | `tests/test_e2e_media.py::test_submit_with_no_daemon_returns_job_id_fast` (0.285 s / 0.201 s); live 0.254 s |
 | Only submit spawns the daemon (`c52`, `o15`) | high | `tests/test_cli_introspection.py::test_read_only_verbs_never_spawn_the_daemon`, `tests/test_e2e_media.py::test_no_daemon_or_socket_after_read_only_verbs` |
-| The daemon is private: socket 0600 in a 0700 dir, other uid refused (`c44`, `o13`) | medium | `tests/test_daemon_server.py::test_socket_0600_in_0700_dir_and_ping`, `::test_peer_with_other_uid_refused_before_read`. The uid check was exercised by injecting `expected_uid`; no real second user (`l4` pending) |
-| No orphan ffmpeg after cancel, SIGTERM or idle exit (`c45`, `o14`) | medium | `tests/test_daemon_server.py::test_cancel_running_ffmpeg_kills_group`, `::test_sigterm_kills_running_groups_and_cleans_up`. SIGKILL escalation is tested only at helper level, and cancelling a *running index* job is untested (`l9` pending) |
+| The daemon is private: socket 0600 in a 0700 dir, other uid refused (`c44`, `o13`) | medium | `tests/test_daemon_server.py::test_socket_0600_in_0700_dir_and_ping`, `::test_peer_with_other_uid_refused_before_read`. The uid check was exercised by injecting `expected_uid`; no real second user (approved `l4`) |
+| No orphan ffmpeg after cancel, SIGTERM or idle exit (`c45`, `o14`) | medium | `tests/test_daemon_server.py::test_cancel_running_ffmpeg_kills_group`, `::test_sigterm_kills_running_groups_and_cleans_up`. SIGKILL escalation is tested only at helper level, and cancelling a *running index* job is untested (approved `l9`) |
 | Sensing is local-only and fails closed (`c8`/`c10`, `o4`, decision `c53`) | high | `tests/test_media_senses.py::test_not_local_fails_closed_and_sends_no_media` (recorded real `/capabilities` payload) |
 | Semantic frame search finds content via live senses (`c19`, `c36`) | medium | `tests/test_media_search.py::test_live_finds_red_square_range` passed 3/3 at `49d5021` after `d13`, and failed at `8dc0e07`. Model output is nondeterministic |
 | The cache is keyed by fingerprint and identity, budgeted, purgeable and inspectable (`c23`/`c47`/`c48`, `o11`/`o12`) | medium | `tests/test_media_index.py::test_load_index_zero_requests_of_any_path`, `::test_budget_exceeded_before_any_request`; live budget refusal. Capped: fingerprint speed versus full hash was never measured (approved `l2`) |
@@ -224,8 +224,20 @@ Lapse ledger evidence:
 |-------|------|------|
 | `l1` | `assumption-for-measurement` | s16 concludes stream-copy cuts are inaccurate from container durations alone; the per-frame probe of the copy cut's first PTS/keyframe returned no rows and was not re-run, so the exact start snap was not measured |
 | `l2` | `assumption-for-measurement` | c49 claims full-file hashing is too slow for multi-GB captures without timing a hash of a large file on this host |
-
-pending approval (not yet evidence): `l3`, `l4`, `l5`, `l6`, `l7`, `l8`, `l9`, `l10`, `l11`, `l12`, `l13`, `l14`
+| `l3` | `control-absent` | t1 (ffmpeg tool layer): tests were written first but never run red before the implementation existed, so the TDD red phase that proves the tests can fail was skipped; the -filters/-encoders parser was validated against ffmpeg 6.1.1 only |
+| `l4` | `control-absent` | t19 (daemon server): real cross-uid rejection verified only by overriding expected_uid (no second user available); SIGKILL escalation after the grace period is untested because ffmpeg always exited on SIGTERM; queued/running records orphaned by a daemon crash are not resumed |
+| `l5` | `grader-unverified` | t7 (output writer): an intermediate commit was made with a broken test import (21 tests failing) before the suite was re-run; caught by flake8 and amended before hand-back |
+| `l6` | `control-absent` | t20 (daemon client): spawn-failure paths (spawned daemon exiting non-zero, 10s spawn timeout) are untested; o15 is tested only against the CLI verbs that exist so far (probe/frames/status/result/cancel verbs land in t21-t23); the idle-exit backlog race was not reproduced; a reset-after-accept retry can double-submit; latency measured on this host only |
+| `l7` | `provenance-missing` | Main agent merged t9 a few seconds before deviation d2 was successfully recorded: the deviate call failed (invalid --affects id) inside a chained command that did not stop on that failure, so the merge ran first |
+| `l8` | `grader-unverified` | d5 fix: lint-then-commit chained with ';' instead of '&&', so two commits landed while flake8 still reported E501 (fixed by follow-up wrap commits; final state green) |
+| `l9` | `control-absent` | t22: cancelling a RUNNING index job (cancel lands between caption batches) is implemented but untested; the index handler reaches the private index._location to report the index dir |
+| `l10` | `grader-unverified` | Main agent's d11 fix commit was made while 1 test failed: 'pytest \| tail -1' masked pytest's exit status inside an && chain |
+| `l11` | `grader-unverified` | t24: a commit was made with invalid TOML in pyproject's description (regex left a trailing comma) because the && chain ended in '\| tail', masking the failure; caught on the next run and amended |
+| `l12` | `provenance-missing` | Main agent filed frame-level obligations o1-o3 (c35/c36/c37) whose bare ids collide with plan obligations o1-o3; evidence e1-e3 and the new c35-c37 evidence are ambiguous by ref (documented devague limitation in obligation_evidence.py). Mitigated by naming the claim id in every new evidence contract text |
+| `l13` | `control-absent` | d13 fix: implementation written before the tests; the red run was produced afterwards by stashing the source change (real red, wrong order) |
+| `l14` | `control-absent` | Validation never ran the suite with ffmpeg absent, so c5/h3 ('skip cleanly when ffmpeg is absent') went unchecked; PR #4's publish.yml test job (no ffmpeg) showed tests that fail/error instead of skipping (test_media_regions, test_media_compile::test_audio_only_cut_concat, test_media_output::test_m4a_accepted_for_mp4_family_source, test_media_probe::test_text_file_unreadable, ...) |
+| `l15` | `control-absent` | sonar t-cli: subagent committed tests/test_e2e_media.py while that file's run showed failures (ungated commit; later confirmed green serially + full suite) |
+| `l16` | `control-absent` | sonar t-daemon: per-file test runs skipped (edits batched, tested together) and regex/ast rewrite diff not read by the subagent |
 
 ### Post-PR fixes (PR #4 CI, fixed at `b0298cc`)
 
