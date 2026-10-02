@@ -250,14 +250,19 @@ def _check_table() -> None:
         if not _TOKEN.match(name):
             raise AssertionError(f"filter name {name!r} is not a plain token")
         for pname, alts in spec.items():
-            if not _TOKEN.match(pname):
-                raise AssertionError(f"param {name}.{pname} is not a plain token")
-            for p in alts if isinstance(alts, tuple) else (alts,):
-                if isinstance(p.kind, frozenset):
-                    if not all(isinstance(v, str) and _TOKEN.match(v) for v in p.kind):
-                        raise AssertionError(f"enum {name}.{pname} has a non-token value")
-                elif p.kind not in (int, float):
-                    raise AssertionError(f"param {name}.{pname} has an untyped kind")
+            _check_table_param(name, pname, alts)
+
+
+def _check_table_param(name: str, pname: str, alts: Spec) -> None:
+    """Every param name and enum value is a plain token; every kind is int/float/enum."""
+    if not _TOKEN.match(pname):
+        raise AssertionError(f"param {name}.{pname} is not a plain token")
+    for p in alts if isinstance(alts, tuple) else (alts,):
+        if isinstance(p.kind, frozenset):
+            if not all(isinstance(v, str) and _TOKEN.match(v) for v in p.kind):
+                raise AssertionError(f"enum {name}.{pname} has a non-token value")
+        elif p.kind not in (int, float):
+            raise AssertionError(f"param {name}.{pname} has an untyped kind")
 
 
 _check_table()
@@ -314,6 +319,33 @@ def _render_value(value: Any) -> str:
     return value if isinstance(value, str) else format_number(value)
 
 
+def _clean_params(name: str, raw: dict[str, Any]) -> dict[str, Any]:
+    """Validate ``raw`` against ``ALLOWLIST[name]``: no unknown keys, every required one set."""
+    spec = ALLOWLIST[name]
+    clean: dict[str, Any] = {}
+    for key, value in raw.items():
+        if key not in spec:
+            raise ValueError(f"{name}: unknown param {key!r}")
+        clean[key] = _check_param(spec[key], value, f"{name}.{key}")
+    for key, p in spec.items():
+        if isinstance(p, Param) and p.required and key not in clean:
+            raise ValueError(f"{name}: missing required param {key!r}")
+    return clean
+
+
+def _clean_enable(name: str, start: Any, end: Any) -> tuple[float, float]:
+    """Validate the timeline ``enable_start``/``enable_end`` pair (at least one is set)."""
+    if name not in TIMELINE_FILTERS:
+        raise ValueError(f"{name}: does not support enable_start/enable_end")
+    if start is None or end is None:
+        raise ValueError(f"{name}: enable_start and enable_end go together")
+    start = _check_one(_f(), start, f"{name}.enable_start")
+    end = _check_one(_f(), end, f"{name}.enable_end")
+    if end < start:
+        raise ValueError(f"{name}: enable_end < enable_start")
+    return start, end
+
+
 @dataclass(frozen=True, eq=True)
 class FilterNode:
     """One allowlisted filter with typed, validated params (see module docstring)."""
@@ -329,27 +361,11 @@ class FilterNode:
             raise ValueError(f"filter {self.name!r} works on stream {FILTER_STREAM[self.name]!r}")
         if not isinstance(self.params, Mapping):
             raise TypeError("params must be a mapping")
-        spec = ALLOWLIST[self.name]
-        clean: dict[str, Any] = {}
         raw = dict(self.params)
         start, end = raw.pop("enable_start", None), raw.pop("enable_end", None)
-        for key, value in raw.items():
-            if key not in spec:
-                raise ValueError(f"{self.name}: unknown param {key!r}")
-            clean[key] = _check_param(spec[key], value, f"{self.name}.{key}")
-        for key, p in spec.items():
-            if isinstance(p, Param) and p.required and key not in clean:
-                raise ValueError(f"{self.name}: missing required param {key!r}")
+        clean = _clean_params(self.name, raw)
         if start is not None or end is not None:
-            if self.name not in TIMELINE_FILTERS:
-                raise ValueError(f"{self.name}: does not support enable_start/enable_end")
-            if start is None or end is None:
-                raise ValueError(f"{self.name}: enable_start and enable_end go together")
-            start = _check_one(_f(), start, f"{self.name}.enable_start")
-            end = _check_one(_f(), end, f"{self.name}.enable_end")
-            if end < start:
-                raise ValueError(f"{self.name}: enable_end < enable_start")
-            clean["enable_start"], clean["enable_end"] = start, end
+            clean["enable_start"], clean["enable_end"] = _clean_enable(self.name, start, end)
         object.__setattr__(self, "params", types.MappingProxyType(clean))
 
     def __hash__(self) -> int:
