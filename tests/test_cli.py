@@ -121,7 +121,8 @@ def test_top_level_help_describes_the_lane_and_lists_new_verbs(capsys) -> None:
         main(["--help"])
     out = capsys.readouterr().out
     assert "template" not in out
-    assert "device plane" in out and "edit" in out
+    assert "device plane" in out
+    assert "edit" in out
     for verb in ("probe", "frames", "edit", "search", "job"):
         assert verb in out
 
@@ -133,7 +134,8 @@ def test_help_and_hints_outside_t23_ownership_name_media(capsys) -> None:
     rc = main(["explain", "nonexistent", "--json"])
     err = json.loads(capsys.readouterr().err)
     assert rc == 1
-    assert not _STALE_CMD.search(out) and not _STALE_CMD.search(err["remediation"])
+    assert not _STALE_CMD.search(out)
+    assert not _STALE_CMD.search(err["remediation"])
     assert "media explain" in err["remediation"]
 
 
@@ -170,7 +172,8 @@ def test_learn_text(capsys: pytest.CaptureFixture[str]) -> None:
     assert "--json" in out
     assert "explain" in out
     assert "template" not in out
-    assert "media probe" in out and "media edit apply" in out
+    assert "media probe" in out
+    assert "media edit apply" in out
     assert not _STALE_CMD.search(out)
 
 
@@ -226,13 +229,15 @@ def test_after_state_clauses_map_to_learn_entries(capsys) -> None:
         assert clause in declared, f"learn --json after_state lacks clause: {clause}"
         for path in paths:
             assert path in declared[clause], (clause, path)
-            assert path in listed and path in registered, path
+            assert path in listed, path
+            assert path in registered, path
     # the edit-list ops of the clause are named in the learn text an agent reads
     rc = main(["learn"])
     text = capsys.readouterr().out
     for word in ("cut", "crop", "box", "blur", "speed", "fade", "xfade", "--apply", "dry run"):
         assert word in text, word
-    assert "media job result" in text and "media search query" in text
+    assert "media job result" in text
+    assert "media search query" in text
 
 
 # --- explain --------------------------------------------------------------
@@ -250,7 +255,8 @@ def test_explain_self(key: str, capsys: pytest.CaptureFixture[str]) -> None:
     assert rc == 0
     out = capsys.readouterr().out
     assert out.startswith("# media")
-    assert "template" not in out and "device plane" in out
+    assert "template" not in out
+    assert "device plane" in out
 
 
 def test_explain_json(capsys: pytest.CaptureFixture[str]) -> None:
@@ -281,7 +287,8 @@ def test_every_registered_path_has_a_catalog_entry() -> None:
     assert not missing, f"no explain entry for: {missing}"
     for path in NEW_PATHS:
         assert path in ENTRIES
-    assert ("media",) in ENTRIES and ("media-cli",) in ENTRIES
+    assert ("media",) in ENTRIES
+    assert ("media-cli",) in ENTRIES
 
 
 @pytest.mark.parametrize("path", NEW_PATHS, ids=lambda p: " ".join(p))
@@ -307,7 +314,9 @@ def test_catalog_documents_write_verb_semantics() -> None:
         assert word in plan, word
     assert "normalized seconds" in plan.lower() or "first presented" in plan
     apply = ENTRIES[("edit", "apply")]
-    assert "--apply" in apply and "job_id" in apply and "daemon" in apply
+    assert "--apply" in apply
+    assert "job_id" in apply
+    assert "daemon" in apply
     assert "input.output_container_mismatch" in apply
     assert "coverage" in ENTRIES[("edit", "regions")]
     assert "sense_calls" in ENTRIES[("search", "index")]
