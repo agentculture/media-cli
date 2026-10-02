@@ -149,6 +149,32 @@ def _scene_times(info: probe.MediaInfo, path: str, thr: float) -> list[float]:
     return out
 
 
+def _explicit_times(times: Sequence[float]) -> list[float]:
+    """Validate an explicit timestamp list (non-empty, all finite seconds)."""
+    if not times:
+        raise _bad("times is empty", "pass at least one timestamp in seconds")
+    out = [float(t) for t in times]
+    for t in out:
+        if not math.isfinite(t):
+            raise MediaInputError(
+                probe.INPUT_TIMESTAMP_OUT_OF_RANGE,
+                f"timestamp {t} is not a finite number of seconds",
+                "use a time in seconds from the first presented frame",
+            )
+    return out
+
+
+def _every_times(info: probe.MediaInfo, every: float, max_frames: int) -> list[float]:
+    """Times 0, every, 2*every ... strictly before the end of the media."""
+    if not (math.isfinite(every) and every > 0):
+        raise _bad(f"every must be a positive number of seconds, got {every}", "use e.g. 2.0")
+    n = math.ceil((min(info.end, 1e9) - probe.EPSILON) / every)
+    n = max(n, 1)
+    if n > max_frames:
+        raise _too_many(n, max_frames)
+    return [i * every for i in range(n)]
+
+
 def _requested_times(
     info: probe.MediaInfo,
     path: str,
@@ -164,26 +190,9 @@ def _requested_times(
             "pass one selector, e.g. times=[1.5, 4.0], every=2.0 or scene=0.3",
         )
     if times is not None:
-        if not times:
-            raise _bad("times is empty", "pass at least one timestamp in seconds")
-        out = [float(t) for t in times]
-        for t in out:
-            if not math.isfinite(t):
-                raise MediaInputError(
-                    probe.INPUT_TIMESTAMP_OUT_OF_RANGE,
-                    f"timestamp {t} is not a finite number of seconds",
-                    "use a time in seconds from the first presented frame",
-                )
-        return out
+        return _explicit_times(times)
     if every is not None:
-        if not (math.isfinite(every) and every > 0):
-            raise _bad(f"every must be a positive number of seconds, got {every}", "use e.g. 2.0")
-        # Times 0, every, 2*every ... strictly before the end of the media.
-        n = math.ceil((min(info.end, 1e9) - probe.EPSILON) / every)
-        n = max(n, 1)
-        if n > max_frames:
-            raise _too_many(n, max_frames)
-        return [i * every for i in range(n)]
+        return _every_times(info, every, max_frames)
     if not (0.0 <= scene <= 1.0):
         raise _bad(f"scene threshold must be within 0..1, got {scene}", "use e.g. 0.3")
     return _scene_times(info, path, scene)
