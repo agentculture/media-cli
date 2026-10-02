@@ -336,13 +336,121 @@ def _publish(tmp: str, output: str, overwrite: bool) -> None:
         raise
 
 
+def _pump_stderr(
+    proc: subprocess.Popen, tail: collections.deque[str], store: JobStore, job_id: str
+) -> None:
+    """Keep the stderr tail in memory and append everything to the job log."""
+    for raw in proc.stderr:  # type: ignore[union-attr]
+        text = raw.decode("utf-8", errors="replace")
+        tail.append(text)
+        try:
+            store.append_log(job_id, text)
+        except OSError:
+            pass
+
+
+def _watch_cancel(
+    proc: subprocess.Popen,
+    pgid: int,
+    kill_grace: float,
+    done: threading.Event,
+    cancel_event: threading.Event,
+) -> None:
+    """Kill the ffmpeg process group as soon as the job is cancelled."""
+    while not done.is_set():
+        if cancel_event.wait(_TICK):
+            _kill_group(proc, pgid, kill_grace)
+            return
+
+
+def _stream_progress(
+    proc: subprocess.Popen, rec: JobRecord, store: JobStore, duration: Any
+) -> tuple[int, dict[str, Any] | None]:
+    """Feed ``-progress`` blocks into the record; return (exit code, last block)."""
+    parser = ProgressParser(duration)
+    last = None
+    for raw in proc.stdout:  # type: ignore[union-attr]
+        block = parser.feed(raw.decode("utf-8", errors="replace"))
+        if block is not None:
+            last = block
+            store.update(rec.id, progress=block)
+    return proc.wait(), last
+
+
+def _supervise_ffmpeg(
+    proc: subprocess.Popen,
+    pgid: int,
+    rec: JobRecord,
+    store: JobStore,
+    spec: dict[str, Any],
+    cancel_event: threading.Event,
+    kill_grace: float,
+    tail: collections.deque[str],
+) -> tuple[int, dict[str, Any] | None]:
+    """Run the stderr pump and cancel watcher around the progress stream.
+
+    Any exception kills the process group; the helper threads are always joined.
+    """
+    done = threading.Event()
+    threads = [
+        threading.Thread(
+            target=_pump_stderr,
+            args=(proc, tail, store, rec.id),
+            daemon=True,
+            name=f"stderr-{rec.id}",
+        ),
+        threading.Thread(
+            target=_watch_cancel,
+            args=(proc, pgid, kill_grace, done, cancel_event),
+            daemon=True,
+            name=f"cancel-{rec.id}",
+        ),
+    ]
+    try:
+        store.update(rec.id, meta={**rec.meta, "pid": proc.pid, "pgid": pgid})
+        for t in threads:
+            t.start()
+        return _stream_progress(proc, rec, store, spec.get("duration"))
+    except BaseException:
+        _kill_group(proc, pgid, kill_grace)
+        raise
+    finally:
+        done.set()
+        for t in threads:
+            if t.ident is not None:
+                t.join(kill_grace + 5)
+
+
+def _finish_ffmpeg(
+    rc: int,
+    last: dict[str, Any] | None,
+    tail: collections.deque[str],
+    rec: JobRecord,
+    spec: dict[str, Any],
+    cancel_event: threading.Event,
+) -> dict[str, Any]:
+    """Turn the finished process into a job result (or cancel/fail), publishing output."""
+    tmp_output = spec.get("tmp_output")
+    if cancel_event.is_set():
+        _remove(tmp_output)
+        raise JobCancelled()
+    if rc != 0:
+        _remove(tmp_output)
+        raise JobFailed(f"ffmpeg failed (exit {rc})", "".join(tail))
+    result: dict[str, Any] = {}
+    if tmp_output and rec.output:
+        _publish(tmp_output, rec.output, bool(spec.get("overwrite", False)))
+    if last is not None:
+        result["progress"] = {**last, "fraction": 1.0}
+    return result
+
+
 def _make_ffmpeg_handler(kill_grace: float) -> Handler:
     def run_ffmpeg(rec: JobRecord, store: JobStore, cancel_event: threading.Event):
         spec = rec.meta.get("spec", {})
-        tmp_output = spec.get("tmp_output")
         argv = ["-nostats", "-progress", "pipe:1", *spec["args"]]
         if cancel_event.is_set():
-            _remove(tmp_output)
+            _remove(spec.get("tmp_output"))
             raise JobCancelled()
         proc = _tools.spawn(
             "ffmpeg",
@@ -353,60 +461,9 @@ def _make_ffmpeg_handler(kill_grace: float) -> Handler:
             start_new_session=True,
         )
         pgid = proc.pid  # start_new_session => it leads its own group
-        done = threading.Event()
         tail: collections.deque[str] = collections.deque(maxlen=200)
-
-        def pump_stderr() -> None:
-            for raw in proc.stderr:  # type: ignore[union-attr]
-                text = raw.decode("utf-8", errors="replace")
-                tail.append(text)
-                try:
-                    store.append_log(rec.id, text)
-                except OSError:
-                    pass
-
-        def watch_cancel() -> None:
-            while not done.is_set():
-                if cancel_event.wait(_TICK):
-                    _kill_group(proc, pgid, kill_grace)
-                    return
-
-        threads = [
-            threading.Thread(target=pump_stderr, daemon=True, name=f"stderr-{rec.id}"),
-            threading.Thread(target=watch_cancel, daemon=True, name=f"cancel-{rec.id}"),
-        ]
-        try:
-            store.update(rec.id, meta={**rec.meta, "pid": proc.pid, "pgid": pgid})
-            for t in threads:
-                t.start()
-            parser = ProgressParser(spec.get("duration"))
-            last = None
-            for raw in proc.stdout:  # type: ignore[union-attr]
-                block = parser.feed(raw.decode("utf-8", errors="replace"))
-                if block is not None:
-                    last = block
-                    store.update(rec.id, progress=block)
-            rc = proc.wait()
-        except BaseException:
-            _kill_group(proc, pgid, kill_grace)
-            raise
-        finally:
-            done.set()
-            for t in threads:
-                if t.ident is not None:
-                    t.join(kill_grace + 5)
-        if cancel_event.is_set():
-            _remove(tmp_output)
-            raise JobCancelled()
-        if rc != 0:
-            _remove(tmp_output)
-            raise JobFailed(f"ffmpeg failed (exit {rc})", "".join(tail))
-        result: dict[str, Any] = {}
-        if tmp_output and rec.output:
-            _publish(tmp_output, rec.output, bool(spec.get("overwrite", False)))
-        if last is not None:
-            result["progress"] = {**last, "fraction": 1.0}
-        return result
+        rc, last = _supervise_ffmpeg(proc, pgid, rec, store, spec, cancel_event, kill_grace, tail)
+        return _finish_ffmpeg(rc, last, tail, rec, spec, cancel_event)
 
     return run_ffmpeg
 
