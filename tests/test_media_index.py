@@ -106,7 +106,8 @@ def test_build_stores_entries_and_layout(gw, cache, media_mp4):
     assert len(gw.posts) == 3  # ceil(5/2)
     e = idx["entries"][0]
     assert set(e) >= {"t", "frame_index", "frame_path", "caption", "model", "prompt_version"}
-    assert e["model"] == "model-a" and os.path.isfile(e["frame_path"])
+    assert e["model"] == "model-a"
+    assert os.path.isfile(e["frame_path"])
     dirs = os.listdir(cache)
     assert len(dirs) == 1
     assert os.path.isfile(os.path.join(cache, dirs[0], "index.json"))
@@ -172,8 +173,11 @@ def test_budget_exceeded_before_any_request(gw, cache, media_mp4):
 
 def test_dry_run_exact_count_no_requests(gw, cache, media_mp4):
     plan = build(gw, media_mp4, cache, dry_run=True)
-    assert plan["frames"] == 5 and plan["batches"] == 3 and plan["sense_calls"] == 3
-    assert plan["cap"] == 600 and plan["cached"] is False
+    assert plan["frames"] == 5
+    assert plan["batches"] == 3
+    assert plan["sense_calls"] == 3
+    assert plan["cap"] == 600
+    assert plan["cached"] is False
     assert gw.requests == 0
     with pytest.raises(MediaInputError) as ei:
         build(gw, media_mp4, cache, dry_run=True, max_calls=2)
@@ -185,7 +189,8 @@ def test_dry_run_exact_count_no_requests(gw, cache, media_mp4):
 
 def test_dry_run_scene_mode_needs_no_gateway(gw, cache, media_red_square):
     plan = build(gw, media_red_square, cache, fps=None, scene=0.03, dry_run=True)
-    assert plan["frames"] >= 1 and plan["sense_calls"] == plan["batches"]
+    assert plan["frames"] >= 1
+    assert plan["sense_calls"] == plan["batches"]
     assert gw.requests == 0
 
 
@@ -222,7 +227,8 @@ def test_lru_eviction_with_tiny_cap(gw, cache, media_mp4):
     build(gw, media_mp4, cache, fps=0.2, max_cache_bytes=1)
     left = os.listdir(cache)
     # the freshly built index is kept; the older one is evicted
-    assert len(left) == 1 and left[0] != first
+    assert len(left) == 1
+    assert left[0] != first
 
 
 def test_lru_evicts_least_recently_used(gw, cache, media_mp4):

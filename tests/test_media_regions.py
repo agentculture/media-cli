@@ -18,7 +18,7 @@ from media_cli.media import editlist as E
 from media_cli.media import output as out
 from media_cli.media import probe as P
 from media_cli.media import regions
-from media_cli.media.errors import ENV_SENSE_NOT_LOCAL, MediaEnvError
+from media_cli.media.errors import ENV_SENSE_NOT_LOCAL, MediaEnvError, MediaInputError
 
 pytestmark = pytest.mark.requires_ffmpeg
 
@@ -54,7 +54,8 @@ class FakeClient:
         self.calls = []
 
     def describe_images(self, paths, prompt, *, role="senses", response_format=None):
-        assert len(paths) == 1 and role == "senses"
+        assert len(paths) == 1
+        assert role == "senses"
         assert response_format is not None
         t = float(re.search(r"frame_t([0-9.]+)_f", str(paths[0])).group(1))
         self.calls.append((t, prompt))
@@ -119,13 +120,19 @@ def test_moving_square_every_frame_covered(moving_square, tmp_path, method):
         moving_square, "the red square", fps=2.0, method=method, client=client
     )
     cov = res["coverage"]
-    assert cov["sample_fps"] == 2.0 and cov["method"] == method
-    assert cov["frames_without_detection"] == [] and cov["rejected_boxes"] == []
+    assert cov["sample_fps"] == 2.0
+    assert cov["method"] == method
+    assert cov["frames_without_detection"] == []
+    assert cov["rejected_boxes"] == []
     assert cov["samples"] == len(client.calls) >= 6
-    assert res["description"] == "the red square" and res["model"]
+    assert res["description"] == "the red square"
+    assert res["model"]
     for r in res["regions"]:
         assert set(r) == {"x", "y", "w", "h", "start", "end"}
-        assert 0 <= r["x"] and r["x"] + r["w"] <= W and r["w"] > 0 and r["h"] > 0
+        assert 0 <= r["x"]
+        assert r["x"] + r["w"] <= W
+        assert r["w"] > 0
+        assert r["h"] > 0
     rows = _redact_and_check(moving_square, res, tmp_path)
     assert len(rows) == FPS * DUR
     leaked = [
@@ -151,7 +158,9 @@ def test_garbage_sample_is_reported_uncovered(moving_square, tmp_path):
 
     res = regions.find_regions(moving_square, "sq", fps=2.0, client=FakeClient(reply))
     gaps = res["coverage"]["frames_without_detection"]
-    assert gaps and gaps[0][0] <= 1.0 + 1e-6 and gaps[-1][1] >= 2.0 - 1e-6
+    assert gaps
+    assert gaps[0][0] <= 1.0 + 1e-6
+    assert gaps[-1][1] >= 2.0 - 1e-6
     # nothing is held across the gap
     for r in res["regions"]:
         assert not (r["start"] < 1.4 and r["end"] > 1.6)
@@ -177,7 +186,8 @@ def test_clamping_and_rejection_recorded(moving_square):
     reasons = {r["reason"] for r in rej}
     assert reasons == {"clamped", "non_positive_size", "outside_frame"}
     clamped = next(r for r in rej if r["reason"] == "clamped")
-    assert clamped["box"] == {"x": -10, "y": 10, "w": 50, "h": 50} and "t" in clamped
+    assert clamped["box"] == {"x": -10, "y": 10, "w": 50, "h": 50}
+    assert "t" in clamped
     assert all(r["x"] >= 0 and r["w"] > 0 for r in res["regions"])
     assert res["coverage"]["frames_without_detection"] == []
 
@@ -216,19 +226,21 @@ def test_start_end_and_margin(moving_square):
     res = regions.find_regions(
         moving_square, "x", fps=2.0, start=1.0, end=2.0, margin=5, client=client
     )
-    assert [t for t, _ in client.calls][0] == 1.0 and [t for t, _ in client.calls][-1] == 2.0
+    assert [t for t, _ in client.calls][0] == 1.0
+    assert [t for t, _ in client.calls][-1] == 2.0
     assert all(r["start"] >= 1.0 - 1e-9 and r["end"] <= 2.0 + 1e-9 for r in res["regions"])
     b = true_box(1.0)
     assert any(r["x"] <= b["x"] - 5 and r["y"] <= b["y"] - 5 for r in res["regions"])
 
 
 def test_bad_arguments(moving_square):
-    with pytest.raises(Exception):
-        regions.find_regions(moving_square, "x", fps=0, client=FakeClient())
-    with pytest.raises(Exception):
-        regions.find_regions(moving_square, "x", method="cubic", client=FakeClient())
-    with pytest.raises(Exception):
-        regions.find_regions(moving_square, "  ", client=FakeClient())
+    client = FakeClient()
+    with pytest.raises(MediaInputError):
+        regions.find_regions(moving_square, "x", fps=0, client=client)
+    with pytest.raises(MediaInputError):
+        regions.find_regions(moving_square, "x", method="cubic", client=client)
+    with pytest.raises(MediaInputError):
+        regions.find_regions(moving_square, "  ", client=client)
 
 
 def test_not_local_error_propagates(moving_square):

@@ -104,7 +104,8 @@ def test_has_encoder():
 @needs_ffmpeg
 def test_run_success_and_failure():
     cp = _tools.run("ffmpeg", ["-hide_banner", "-version"])
-    assert cp.returncode == 0 and "ffmpeg version" in cp.stdout
+    assert cp.returncode == 0
+    assert "ffmpeg version" in cp.stdout
     with pytest.raises(MediaEnvError) as ei:
         _tools.run("ffprobe", ["-v", "error", "/nonexistent/file.mp4"])
     assert ei.value.kind == ENV_FFMPEG_FAILED
@@ -129,7 +130,8 @@ def test_run_timeout_is_typed():
 def test_spawn_returns_popen():
     proc = _tools.spawn("ffmpeg", ["-hide_banner", "-version"], stdout=subprocess.PIPE, text=True)
     out, _ = proc.communicate()
-    assert proc.returncode == 0 and "ffmpeg version" in out
+    assert proc.returncode == 0
+    assert "ffmpeg version" in out
 
 
 def test_run_uses_absolute_list_argv_no_shell(monkeypatch):

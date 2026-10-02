@@ -28,7 +28,8 @@ def test_plan_chunks_edges():
 def test_plan_chunks_invariants():
     for d in (1.0, 29.9, 57.9, 58.0, 58.1, 75.0, 600.0):
         chunks = plan_chunks(d)
-        assert chunks[0][0] == 0.0 and chunks[-1][1] == pytest.approx(d)
+        assert chunks[0][0] == 0.0
+        assert chunks[-1][1] == pytest.approx(d)
         for (s, e), nxt in zip(chunks, chunks[1:] + [None]):
             assert 0 < e - s <= 30.0
             if nxt:
@@ -81,7 +82,8 @@ def test_transcribe_75s_boundaries_and_offsets(sine75, tmp_path):
 
 def test_start_offset_shifts_times(sine75):
     segs = transcribe_media(str(sine75), transcriber=lambda w, language="en": "x", start_offset=1.5)
-    assert segs[0]["start"] == 1.5 and segs[-1]["end"] == 76.5
+    assert segs[0]["start"] == 1.5
+    assert segs[-1]["end"] == 76.5
 
 
 def test_overlap_duplicates_merged(sine75):

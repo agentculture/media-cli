@@ -149,7 +149,8 @@ def test_last_sample_range_ends_at_media_end(cache, media_mp4):
         built(g, media_mp4, cache)
         hits = search.query(media_mp4, "red", index_params={"fps": 1}, batch_size=4,
                             client=g.client(), cache_dir=cache)  # fmt: skip
-        assert hits[0]["start"] == 8.0 and 9.9 <= hits[0]["end"] <= 10.1
+        assert hits[0]["start"] == 8.0
+        assert 9.9 <= hits[0]["end"] <= 10.1
     finally:
         g.close()
 
@@ -205,17 +206,19 @@ def test_malformed_reply_is_sense_unavailable(cache, media_mp4, body):
     try:
         built(g, media_mp4, cache)
         g.matches_body = body
+        client = g.client()
         with pytest.raises(MediaEnvError) as ei:
             search.query(media_mp4, "red", index_params={"fps": 1}, batch_size=4,
-                         client=g.client(), cache_dir=cache)  # fmt: skip
+                         client=client, cache_dir=cache)  # fmt: skip
         assert ei.value.kind == "env.sense_unavailable"
     finally:
         g.close()
 
 
 def test_missing_index_is_typed_input_error(gw, cache, media_mp4):
+    client = gw.client()
     with pytest.raises(MediaInputError) as ei:
-        search.query(media_mp4, "red", index_params={"fps": 1}, client=gw.client(), cache_dir=cache)
+        search.query(media_mp4, "red", index_params={"fps": 1}, client=client, cache_dir=cache)
     assert ei.value.kind == search.INPUT_INDEX_MISSING == "input.index_missing"
     assert gw.log == []  # nothing sent anywhere
 
@@ -236,10 +239,11 @@ def test_dead_gateway_is_sense_unavailable(gw, cache, media_mp4):
 
 
 def test_bad_arguments(gw, cache, media_mp4):
+    client = gw.client()
     with pytest.raises(MediaInputError):
-        search.query(media_mp4, "  ", client=gw.client(), cache_dir=cache)
+        search.query(media_mp4, "  ", client=client, cache_dir=cache)
     with pytest.raises(MediaInputError):
-        search.query(media_mp4, "x", modality="smell", client=gw.client(), cache_dir=cache)
+        search.query(media_mp4, "x", modality="smell", client=client, cache_dir=cache)
 
 
 def test_speech_matches_transcript_and_caches(cache, media_mp4):
@@ -249,7 +253,8 @@ def test_speech_matches_transcript_and_caches(cache, media_mp4):
                             client=g.client(), cache_dir=cache)  # fmt: skip
         assert len(hits) == 1
         h = hits[0]
-        assert h["start"] == 0.0 and h["end"] == pytest.approx(10.0, abs=0.2)
+        assert h["start"] == 0.0
+        assert h["end"] == pytest.approx(10.0, abs=0.2)
         assert h["evidence"]["kind"] == "speech"
         assert "red square" in h["evidence"]["text"]
         assert os.path.isfile(h["evidence"]["transcript"])
@@ -334,7 +339,8 @@ def test_transcript_cache_is_lru_bounded_and_keeps_newest(cache, tmp_path, media
         os.utime(first, (1, 1))  # oldest
         _speech(g, files[1], cache, max_transcript_bytes=1)  # cap tiny: evicts old, keeps new
         rep = search.cache_report(cache_dir=cache)["transcripts"]
-        assert len(rep) == 1 and not os.path.exists(first)
+        assert len(rep) == 1
+        assert not os.path.exists(first)
         assert os.path.realpath(rep[0]["source"]) == os.path.realpath(files[1])
     finally:
         g.close()
@@ -346,9 +352,12 @@ def test_cache_report_lists_indexes_and_transcripts(cache, media_mp4):
         built(g, media_mp4, cache)
         _speech(g, str(media_mp4), cache)
         rep = search.cache_report(str(media_mp4), cache_dir=cache)
-        assert len(rep["indexes"]) == 1 and len(rep["transcripts"]) == 1
+        assert len(rep["indexes"]) == 1
+        assert len(rep["transcripts"]) == 1
         i, t = rep["indexes"][0], rep["transcripts"][0]
-        assert i["entries"] == 10 and i["bytes"] > 0 and i["fingerprint"] == t["fingerprint"]
+        assert i["entries"] == 10
+        assert i["bytes"] > 0
+        assert i["fingerprint"] == t["fingerprint"]
         assert os.path.realpath(i["source"]) == os.path.realpath(media_mp4)
         assert t["segments"] == 1
         assert rep["total_bytes"] == i["bytes"] + t["bytes"]
